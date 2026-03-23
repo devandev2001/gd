@@ -172,19 +172,6 @@ export default function SurveyForm() {
         ref={formRef}
         noValidate
       >
-        {/* Success message at top so user sees it after scroll */}
-        {success && (
-          <div className="msg success-msg success-msg-top">
-            <span className="success-icon">✅</span>
-            <div>
-              <strong>Submitted Successfully!</strong>
-              <p style={{ margin: "4px 0 0", fontSize: "13px", opacity: 0.85 }}>
-                Response has been saved to Google Sheet.
-              </p>
-            </div>
-          </div>
-        )}
-
         {/* Section 1: Location & Field Agent */}
         <div className="form-section">
           <div className="section-title">
@@ -441,6 +428,20 @@ export default function SurveyForm() {
           All fields are mandatory. Data is saved to the central Google Sheet.
         </p>
       </form>
+
+      {/* ── Success Popup Overlay ── */}
+      {success && (
+        <div className="popup-overlay" onClick={() => setSuccess(false)}>
+          <div className="popup-box" onClick={(e) => e.stopPropagation()}>
+            <div className="popup-check">✅</div>
+            <h2 className="popup-title">Submitted Successfully!</h2>
+            <p className="popup-text">Response has been saved to Google Sheet.</p>
+            <button className="popup-btn" onClick={() => setSuccess(false)}>
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

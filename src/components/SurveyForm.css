@@ -277,32 +277,84 @@
   background: rgba(19, 136, 8, 0.1);
   color: #138808;
   border: 1px solid rgba(19, 136, 8, 0.2);
-  animation: slideDown 0.3s ease;
 }
 
-.success-msg-top {
+/* ---------- Success Popup Overlay ---------- */
+.popup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
-  gap: 12px;
-  text-align: left;
-  padding: 16px 18px;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+  animation: fadeIn 0.25s ease;
+}
+
+.popup-box {
+  background: #fff;
+  border-radius: 20px;
+  padding: 36px 28px 28px;
+  text-align: center;
+  max-width: 320px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  animation: popUp 0.35s ease;
+}
+
+.popup-check {
+  font-size: 52px;
+  margin-bottom: 12px;
+  line-height: 1;
+}
+
+.popup-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #138808;
+  margin: 0 0 8px;
+}
+
+.popup-text {
+  font-size: 14px;
+  color: #4a5568;
+  margin: 0 0 20px;
+  line-height: 1.4;
+}
+
+.popup-btn {
+  background: linear-gradient(135deg, #ff9933 0%, #138808 100%);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 48px;
   font-size: 16px;
-  background: rgba(19, 136, 8, 0.12);
-  border: 2px solid rgba(19, 136, 8, 0.35);
-  border-radius: 14px;
-  margin-bottom: 14px;
-  animation: successPop 0.4s ease;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  min-height: 48px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 4px 14px rgba(255, 153, 51, 0.3);
 }
 
-.success-icon {
-  font-size: 28px;
-  flex-shrink: 0;
+.popup-btn:active {
+  transform: scale(0.96);
 }
 
-@keyframes successPop {
-  0%   { opacity: 0; transform: scale(0.9) translateY(-10px); }
-  60%  { transform: scale(1.02) translateY(0); }
-  100% { opacity: 1; transform: scale(1) translateY(0); }
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes popUp {
+  0%   { opacity: 0; transform: scale(0.75); }
+  60%  { transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1); }
 }
 
 @keyframes slideDown {
