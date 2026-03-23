@@ -127,9 +127,9 @@ export default function SurveyForm() {
       setForm(initialForm);
       setFieldErrors({});
       setAttempted(false);
-      setTimeout(() => setSuccess(false), 4000);
-      // Scroll to top on success
+      // Scroll to top so user sees the success message
       window.scrollTo({ top: 0, behavior: "smooth" });
+      setTimeout(() => setSuccess(false), 5000);
     } catch {
       setError(
         "Submission failed. Please check your internet connection and try again."
@@ -172,6 +172,19 @@ export default function SurveyForm() {
         ref={formRef}
         noValidate
       >
+        {/* Success message at top so user sees it after scroll */}
+        {success && (
+          <div className="msg success-msg success-msg-top">
+            <span className="success-icon">✅</span>
+            <div>
+              <strong>Submitted Successfully!</strong>
+              <p style={{ margin: "4px 0 0", fontSize: "13px", opacity: 0.85 }}>
+                Response has been saved to Google Sheet.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Section 1: Location & Field Agent */}
         <div className="form-section">
           <div className="section-title">
@@ -399,7 +412,7 @@ export default function SurveyForm() {
           </div>
         </div>
 
-        {/* Error / Success */}
+        {/* Error */}
         {error && (
           <div className="msg error-msg">
             ⚠️ {error}
@@ -410,11 +423,6 @@ export default function SurveyForm() {
                 ))}
               </ul>
             )}
-          </div>
-        )}
-        {success && (
-          <div className="msg success-msg">
-            ✅ Response submitted successfully!
           </div>
         )}
 
