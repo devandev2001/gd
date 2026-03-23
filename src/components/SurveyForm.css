@@ -1,0 +1,511 @@
+/* ===== Kerala Survey 2026 — Indian Tricolor Watercolor Theme ===== */
+
+.survey-wrapper {
+  min-height: 100vh;
+  min-height: 100dvh;
+  /* Exact Indian tricolor watercolor background (local copy) */
+  background:
+    url("/bg-tricolor.jpg")
+      center / cover no-repeat;
+  background-attachment: scroll;
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  padding: 0 0 env(safe-area-inset-bottom, 20px);
+  color: #2d3748;
+  position: relative;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Light overlay for readability */
+.survey-wrapper::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.5);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.survey-wrapper > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- Tricolor stripe ---------- */
+.tricolor-stripe {
+  display: flex;
+  height: 5px;
+  width: 100%;
+  flex-shrink: 0;
+}
+.tricolor-stripe span:nth-child(1) {
+  flex: 1;
+  background: #ff9933;
+}
+.tricolor-stripe span:nth-child(2) {
+  flex: 1;
+  background: #fff;
+}
+.tricolor-stripe span:nth-child(3) {
+  flex: 1;
+  background: #138808;
+}
+
+/* ---------- Header ---------- */
+.survey-header {
+  background: linear-gradient(135deg, #ff9933 0%, #e8870e 50%, #138808 100%);
+  padding: 14px 16px;
+  text-align: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.logo-badge {
+  width: 42px;
+  height: 42px;
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+}
+
+.logo-badge svg {
+  width: 22px;
+  height: 22px;
+}
+
+.survey-header h1 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.subtitle {
+  margin: 1px 0 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+/* ---------- Form ---------- */
+.survey-form {
+  max-width: 600px;
+  width: 100%;
+  margin: 12px auto 0;
+  padding: 0 12px 20px;
+  box-sizing: border-box;
+}
+
+/* ---------- Section ---------- */
+.form-section {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 153, 51, 0.18);
+  border-radius: 14px;
+  padding: 16px 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a202c;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 153, 51, 0.15);
+}
+
+.section-number {
+  width: 26px;
+  height: 26px;
+  background: linear-gradient(135deg, #ff9933, #e8870e);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+/* ---------- Fields ---------- */
+.field-group {
+  margin-bottom: 14px;
+}
+
+.field-group:last-child {
+  margin-bottom: 0;
+}
+
+.field-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a5568;
+  margin-bottom: 5px;
+  letter-spacing: 0.2px;
+}
+
+.req {
+  color: #e53e3e;
+}
+
+.field-group select,
+.question-card select {
+  width: 100%;
+  /* 16px minimum font-size prevents iOS auto-zoom on focus */
+  font-size: 16px;
+  padding: 12px 36px 12px 12px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(19, 136, 8, 0.22);
+  background-color: rgba(255, 255, 255, 0.9);
+  color: #2d3748;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1.5l5 5 5-5' stroke='%234a5568' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+  font-family: inherit;
+  box-sizing: border-box;
+  /* Better tap targets */
+  min-height: 48px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.field-group select:focus,
+.question-card select:focus {
+  border-color: #ff9933;
+  box-shadow: 0 0 0 3px rgba(255, 153, 51, 0.15);
+}
+
+.field-group select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background-color: rgba(240, 240, 240, 0.7);
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* ---------- Question Cards ---------- */
+.question-card {
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(19, 136, 8, 0.08);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.question-card:last-child {
+  margin-bottom: 0;
+}
+
+.question-text {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #2d3748;
+}
+
+.question-text strong {
+  color: #1a202c;
+}
+
+.q-num {
+  display: inline-block;
+  background: linear-gradient(135deg, #ff9933, #e8870e);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 5px;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+/* ---------- Messages ---------- */
+.msg {
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.error-msg {
+  background: rgba(229, 62, 62, 0.1);
+  color: #c53030;
+  border: 1px solid rgba(229, 62, 62, 0.2);
+}
+
+.success-msg {
+  background: rgba(19, 136, 8, 0.1);
+  color: #138808;
+  border: 1px solid rgba(19, 136, 8, 0.2);
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Submit Button ---------- */
+.submit-btn {
+  width: 100%;
+  padding: 16px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #ff9933 0%, #138808 100%);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
+  box-shadow: 0 4px 14px rgba(255, 153, 51, 0.3);
+  font-family: inherit;
+  letter-spacing: 0.3px;
+  min-height: 54px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.submit-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(255, 153, 51, 0.4);
+}
+
+.submit-btn:active:not(:disabled) {
+  transform: scale(0.98);
+  box-shadow: 0 2px 8px rgba(255, 153, 51, 0.3);
+}
+
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- Footer Note ---------- */
+.footer-note {
+  text-align: center;
+  font-size: 11px;
+  color: #718096;
+  margin-top: 12px;
+  padding-bottom: 16px;
+}
+
+/* ---------- Per-field Validation Errors ---------- */
+.field-group.has-error select,
+.question-card.has-error select {
+  border-color: #e53e3e;
+  box-shadow: 0 0 0 2px rgba(229, 62, 62, 0.15);
+  animation: shake 0.35s ease;
+}
+
+.field-error-text {
+  color: #e53e3e;
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.field-error-text::before {
+  content: "⚠";
+  font-size: 12px;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+
+/* Error message box (top-level) */
+.error-msg .error-list {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+}
+.error-msg .error-list li {
+  padding: 2px 0;
+}
+.error-msg .error-list li::before {
+  content: "• ";
+  color: #e53e3e;
+}
+
+/* ====================================================
+   MOBILE-FIRST RESPONSIVE — phones < 480px
+   ==================================================== */
+@media (max-width: 480px) {
+  .survey-wrapper {
+    padding-bottom: calc(env(safe-area-inset-bottom, 12px) + 12px);
+  }
+
+  .survey-header {
+    padding: 12px 10px;
+  }
+  .survey-header h1 {
+    font-size: 17px;
+  }
+  .subtitle {
+    font-size: 10px;
+  }
+  .logo-badge {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+  }
+  .logo-badge svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .survey-form {
+    padding: 0 8px 16px;
+    margin-top: 10px;
+  }
+
+  .form-section {
+    padding: 14px 12px;
+    margin-bottom: 10px;
+    border-radius: 12px;
+  }
+
+  .section-title {
+    font-size: 14px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    gap: 8px;
+  }
+  .section-number {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+    border-radius: 6px;
+  }
+
+  .field-group {
+    margin-bottom: 12px;
+  }
+  .field-group label {
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+
+  .field-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .question-card {
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+  }
+  .question-text {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+
+  .submit-btn {
+    min-height: 52px;
+    font-size: 16px;
+    border-radius: 12px;
+  }
+}
+
+/* Very small phones (iPhone SE, 320px-360px) */
+@media (max-width: 360px) {
+  .survey-header h1 {
+    font-size: 15px;
+  }
+  .header-content {
+    gap: 8px;
+  }
+  .logo-badge {
+    width: 32px;
+    height: 32px;
+  }
+  .logo-badge svg {
+    width: 18px;
+    height: 18px;
+  }
+  .survey-form {
+    padding: 0 6px 12px;
+  }
+  .form-section {
+    padding: 12px 10px;
+  }
+}
+
+/* Larger phones / small tablets */
+@media (min-width: 481px) and (max-width: 768px) {
+  .survey-form {
+    padding: 0 16px 24px;
+    margin-top: 14px;
+  }
+  .form-section {
+    padding: 18px 16px;
+  }
+}
