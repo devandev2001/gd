@@ -8,6 +8,7 @@ import {
   winOptions,
   GOOGLE_SCRIPT_URL,
 } from "../data/surveyData";
+import { getWeights } from "../data/demographicWeights";
 import "./SurveyForm.css";
 
 const initialForm = {
@@ -101,15 +102,23 @@ export default function SurveyForm() {
     setSubmitting(true);
 
     try {
+      // Look up demographic weights
+      const { casteWeight, genderWeight, ageWeight } = getWeights(
+        form.ac,
+        form.caste,
+        form.gender,
+        form.age
+      );
+
       const payload = {
         timestamp: new Date().toLocaleString("en-IN", {
           timeZone: "Asia/Kolkata",
         }),
         ac: form.ac,
         faName: form.faName,
-        caste: form.caste,
-        gender: form.gender,
-        age: form.age,
+        caste: casteWeight,     // caste % / 100
+        gender: genderWeight,   // gender % / 100
+        age: ageWeight,         // Age Normal from Sheet2
         vote2021: form.vote2021,
         vote2024: form.vote2024,
         vote2026: form.vote2026,

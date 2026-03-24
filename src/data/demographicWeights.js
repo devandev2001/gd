@@ -2,12 +2,9 @@
  * Demographic weight lookup tables
  * Source: Cast_Mapping_Split.xlsx
  *
- * Values are percentages from the CSV.
- * The form divides by 100 before sending to Google Sheets.
- *
- * Caste columns in CSV: Nair, Ezhava, Muslim, Christain (sic), SC/ST, Others
- * Gender columns: Male Percentage, Female Percentage
- * Age-Gender columns: from Sheet2 — Male %, Female % per age group
+ * Caste: percentage for that caste in that AC / 100
+ * Gender: male/female percentage for that AC / 100
+ * Age: "Age Normal" value from Sheet2 (already a decimal fraction)
  */
 
 // ── AC-level caste & gender data ──────────────────────────────
@@ -87,17 +84,18 @@ export const acDemographics = {
   },
 };
 
-// ── Age-group gender weights (statewide) ──────────────────────
+// ── Age Normal weights (statewide, from Sheet2) ───────────────
 // Key = age group label as shown in the form
-export const ageGenderWeights = {
-  "18-19": { male: 50.31, female: 49.69 },
-  "20-29": { male: 50.06, female: 49.94 },
-  "30-39": { male: 51.57, female: 48.43 },
-  "40-49": { male: 49.49, female: 50.50 },
-  "50-59": { male: 46.26, female: 53.74 },
-  "60-69": { male: 47.57, female: 52.43 },
-  "70-79": { male: 46.71, female: 53.29 },
-  "80+":   { male: 40.12, female: 59.88 },
+// Value = "Age Normal" directly from the CSV (already a decimal)
+export const ageNormalWeights = {
+  "18-19": 0.01574992977,
+  "20-29": 0.16726013,
+  "30-39": 0.1839168018,
+  "40-49": 0.2081028821,
+  "50-59": 0.19009771,
+  "60-69": 0.1395625022,
+  "70-79": 0.07469513213,
+  "80+":   0.02061491203,
 };
 
 /**
@@ -109,12 +107,11 @@ export const ageGenderWeights = {
  * @param {string} ageGroup - e.g. "30-39"
  *
  * @returns {{ casteWeight: number, genderWeight: number, ageWeight: number }}
- *          All values are decimal fractions (percentage / 100).
+ *          Caste & Gender = percentage / 100. Age = Age Normal value as-is.
  *          Returns 0 if lookup fails.
  */
 export function getWeights(ac, caste, gender, ageGroup) {
   const acData = acDemographics[ac];
-  const ageData = ageGenderWeights[ageGroup];
 
   // Caste weight: that caste's % in this AC / 100
   const casteWeight = acData ? (acData[caste] ?? 0) / 100 : 0;
@@ -123,8 +120,8 @@ export function getWeights(ac, caste, gender, ageGroup) {
   const genderKey = gender === "Male" ? "male" : "female";
   const genderWeight = acData ? (acData[genderKey] ?? 0) / 100 : 0;
 
-  // Age weight: male/female % for this age group / 100
-  const ageWeight = ageData ? (ageData[genderKey] ?? 0) / 100 : 0;
+  // Age weight: Age Normal value from Sheet2 (already a decimal)
+  const ageWeight = ageNormalWeights[ageGroup] ?? 0;
 
   return { casteWeight, genderWeight, ageWeight };
 }
