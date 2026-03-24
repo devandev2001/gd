@@ -110,6 +110,9 @@ export default function SurveyForm() {
         form.age
       );
 
+      // Normalized score = caste × gender × age
+      const normalizedScore = casteWeight * genderWeight * ageWeight;
+
       const payload = {
         timestamp: new Date().toLocaleString("en-IN", {
           timeZone: "Asia/Kolkata",
@@ -123,6 +126,7 @@ export default function SurveyForm() {
         vote2024: form.vote2024,
         vote2026: form.vote2026,
         whoWillWin: form.whoWillWin,
+        normalizedScore: normalizedScore,  // caste × gender × age
       };
 
       await fetch(GOOGLE_SCRIPT_URL, {
