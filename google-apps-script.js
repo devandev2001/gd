@@ -145,9 +145,88 @@ function doPost(e) {
 }
 
 function doGet(e) {
+  var action = e && e.parameter && e.parameter.action;
+
+  try {
+    if (action === "entries") {
+      return jsonResponse(getEntriesForDate(e.parameter.date || ""));
+    }
+    if (action === "summary") {
+      return jsonResponse(getSummaryForDate(e.parameter.date || ""));
+    }
+    if (action === "dates") {
+      return jsonResponse(getAvailableDates());
+    }
+    // Health check
+    return ContentService
+      .createTextOutput("Kerala Survey 2026 API is running.")
+      .setMimeType(ContentService.MimeType.TEXT);
+  } catch (err) {
+    return jsonResponse({ error: err.toString() });
+  }
+}
+
+function jsonResponse(obj) {
   return ContentService
-    .createTextOutput("Kerala Survey 2026 API is running.")
-    .setMimeType(ContentService.MimeType.TEXT);
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// Returns all raw entries for a given date string (e.g. "25/3/2026")
+function getEntriesForDate(dateStr) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { entries: [], total: 0 };
+
+  var data = sheet.getRange(2, 1, lastRow - 1, 11).getValues();
+  var headers = ["timestamp","ac","faName","casteWeight","genderWeight","ageWeight",
+                 "vote2021","vote2024","vote2026","whoWillWin","normalizedScore"];
+
+  var filtered = dateStr
+    ? data.filter(function(row) { return String(row[0]).indexOf(dateStr) !== -1; })
+    : data;
+
+  var entries = filtered.map(function(row) {
+    var obj = {};
+    headers.forEach(function(h, i) { obj[h] = row[i]; });
+    return obj;
+  });
+
+  return { entries: entries, total: entries.length };
+}
+
+// Returns summary data from a named tab (e.g. "25-Mar-2026")
+function getSummaryForDate(tabName) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(tabName);
+  if (!sheet) return { rows: [], tabName: tabName, found: false };
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { rows: [], tabName: tabName, found: true };
+
+  var data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+  var rows = data
+    .filter(function(row) { return String(row[0]).trim() !== "" && String(row[0]).indexOf("Report") === -1; })
+    .map(function(row) {
+      return {
+        ac: row[0], totalEntries: row[1],
+        ldf: row[2], udf: row[3], bjp: row[4], others: row[5],
+        winner: row[6]
+      };
+    });
+
+  return { rows: rows, tabName: tabName, found: true };
+}
+
+// Returns list of available summary tab names (excludes Sheet1/raw data sheet)
+function getAvailableDates() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheets = ss.getSheets();
+  var dates = [];
+  for (var i = 1; i < sheets.length; i++) {
+    dates.push(sheets[i].getName());
+  }
+  return { dates: dates };
 }
 
 // ═══════════════════════════════════════════════════════════
