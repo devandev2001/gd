@@ -9,17 +9,13 @@
  *
  * 3. Delete everything in Code.gs and paste THIS entire file.
  *
- * 4. Click  Deploy → New deployment
- *      • Type  = Web app
- *      • Execute as = Me
- *      • Who has access = Anyone
+ * 4. Click  Deploy → Manage deployments → Edit (pencil icon)
+ *      • Version = New version
+ *      → Deploy
  *
- * 5. Copy the Web App URL and paste it into:
- *    src/data/surveyData.js → GOOGLE_SCRIPT_URL
+ * 5. The Web App URL stays the same (no need to update surveyData.js).
  *
- * 6. Click "Authorize" when prompted.
- *
- * 7. SET UP DAILY REPORT TRIGGER:
+ * 6. SET UP DAILY REPORT TRIGGER:
  *    In Apps Script, go to Triggers (clock icon on left) →
  *    + Add Trigger →
  *      Function: generateDailyReport
@@ -28,72 +24,14 @@
  *      Time: 8pm to 9pm
  *    → Save
  *
- * That's it! The form will now write data to your sheet,
- * and a daily report tab is auto-created at 8 PM.
+ * 7. RUN fixTextRows ONCE to clean up old text rows:
+ *    Select fixTextRows in dropdown → ▶ Run
  */
 
 // ═══════════════════════════════════════════════════════════
-// 1. RECEIVE FORM SUBMISSIONS
+// DEMOGRAPHIC DATA (shared by doPost, fixTextRows, report)
 // ═══════════════════════════════════════════════════════════
 
-function doPost(e) {
-  try {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    var data = JSON.parse(e.postData.contents);
-
-    // Add header row if sheet is empty
-    if (sheet.getLastRow() === 0) {
-      sheet.appendRow([
-        "Timestamp",
-        "Assembly Constituency",
-        "FA Name",
-        "Caste Weight",
-        "Gender Weight",
-        "Age Weight",
-        "Vote in 2021 AE",
-        "Vote in 2024 GE",
-        "Vote in 2026 AE",
-        "Who Will Win",
-        "Who Will Win Normalized"
-      ]);
-    }
-
-    sheet.appendRow([
-      data.timestamp,
-      data.ac,
-      data.faName,
-      data.caste,
-      data.gender,
-      data.age,
-      data.vote2021,
-      data.vote2024,
-      data.vote2026,
-      data.whoWillWin,
-      data.normalizedScore
-    ]);
-
-    return ContentService
-      .createTextOutput(JSON.stringify({ status: "success" }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService
-      .createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-function doGet(e) {
-  return ContentService
-    .createTextOutput("Kerala Survey 2026 API is running.")
-    .setMimeType(ContentService.MimeType.TEXT);
-}
-
-// ═══════════════════════════════════════════════════════════
-// 2. ONE-TIME CLEANUP — run manually once to fix old text rows
-//    In Apps Script: click ▶ Run and choose fixTextRows
-// ═══════════════════════════════════════════════════════════
-
-// Demographic data (mirrors demographicWeights.js)
 var AC_DEMOGRAPHICS = {
   Kattakkada:         { male:48.01, female:51.99, Nair:34.99, Ezhava:14.83, Muslim:6.04,  Christian:11.03, "SC/ST":11.03, Others:9.50  },
   Kovalam:            { male:48.88, female:51.11, Nair:14.71, Ezhava:14.35, Muslim:9.56,  Christian:11.49, "SC/ST":11.49, Others:12.59 },
@@ -126,55 +64,130 @@ var AGE_WEIGHTS = {
   "80+":   0.02061491203,
 };
 
-/**
- * Run this ONCE to convert any old text rows (where Caste Weight / Gender Weight /
- * Age Weight columns still contain the raw label instead of a number).
- *
- * Steps: Extensions → Apps Script → select fixTextRows → ▶ Run
- */
+var CASTE_LIST = ["Nair","Ezhava","Muslim","Christian","SC/ST","Others"];
+var GENDER_LIST = ["Male","Female"];
+
+function isTextLabel(val) {
+  var s = String(val).trim();
+  if (s === "") return false;
+  return isNaN(parseFloat(s));
+}
+
+function resolveWeights(ac, casteVal, genderVal, ageVal) {
+  var acData = AC_DEMOGRAPHICS[ac];
+  var casteW, genderW, ageW;
+
+  if (isTextLabel(casteVal)) {
+    casteW = acData ? (acData[String(casteVal).trim()] || 0) / 100 : 0;
+  } else {
+    casteW = parseFloat(casteVal) || 0;
+  }
+
+  if (isTextLabel(genderVal)) {
+    var g = String(genderVal).trim();
+    genderW = acData ? (g === "Male" ? acData.male : acData.female) / 100 : 0;
+  } else {
+    genderW = parseFloat(genderVal) || 0;
+  }
+
+  if (isTextLabel(ageVal)) {
+    ageW = AGE_WEIGHTS[String(ageVal).trim()] || 0;
+  } else {
+    ageW = parseFloat(ageVal) || 0;
+  }
+
+  return { casteW: casteW, genderW: genderW, ageW: ageW, norm: casteW * genderW * ageW };
+}
+
+// ═══════════════════════════════════════════════════════════
+// 1. RECEIVE FORM SUBMISSIONS
+//    Now auto-converts text labels to numbers server-side
+// ═══════════════════════════════════════════════════════════
+
+function doPost(e) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var data = JSON.parse(e.postData.contents);
+
+    if (sheet.getLastRow() === 0) {
+      sheet.appendRow([
+        "Timestamp", "Assembly Constituency", "FA Name",
+        "Caste Weight", "Gender Weight", "Age Weight",
+        "Vote in 2021 AE", "Vote in 2024 GE", "Vote in 2026 AE",
+        "Who Will Win", "Who Will Win Normalized"
+      ]);
+    }
+
+    var w = resolveWeights(data.ac, data.caste, data.gender, data.age);
+
+    sheet.appendRow([
+      data.timestamp,
+      data.ac,
+      data.faName,
+      w.casteW,
+      w.genderW,
+      w.ageW,
+      data.vote2021,
+      data.vote2024,
+      data.vote2026,
+      data.whoWillWin,
+      w.norm
+    ]);
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: "success" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doGet(e) {
+  return ContentService
+    .createTextOutput("Kerala Survey 2026 API is running.")
+    .setMimeType(ContentService.MimeType.TEXT);
+}
+
+// ═══════════════════════════════════════════════════════════
+// 2. ONE-TIME CLEANUP — run manually once to fix old text rows
+//    Select fixTextRows → ▶ Run
+// ═══════════════════════════════════════════════════════════
+
 function fixTextRows() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) { Logger.log("No data rows found."); return; }
 
-  // Columns (1-indexed): 2=AC, 4=CasteWeight, 5=GenderWeight, 6=AgeWeight, 11=NormalizedScore
   var data = sheet.getRange(2, 1, lastRow - 1, 11).getValues();
   var fixed = 0;
 
   for (var i = 0; i < data.length; i++) {
     var row = data[i];
-    var ac        = String(row[1]).trim();
-    var casteCell = row[3];   // col 4
-    var genderCell= row[4];   // col 5
-    var ageCell   = row[5];   // col 6
+    var ac         = String(row[1]).trim();
+    var casteCell  = row[3];
+    var genderCell = row[4];
+    var ageCell    = row[5];
 
-    // Only fix rows where caste/gender/age are still text labels
-    var casteIsText  = isNaN(parseFloat(casteCell))  && String(casteCell).trim() !== "";
-    var genderIsText = isNaN(parseFloat(genderCell)) && String(genderCell).trim() !== "";
-    var ageIsText    = isNaN(parseFloat(ageCell))    && String(ageCell).trim() !== "";
+    var casteIsText  = isTextLabel(casteCell);
+    var genderIsText = isTextLabel(genderCell);
+    var ageIsText    = isTextLabel(ageCell);
 
-    if (!casteIsText && !genderIsText && !ageIsText) continue; // already numbers
+    if (!casteIsText && !genderIsText && !ageIsText) continue;
 
-    var acData = AC_DEMOGRAPHICS[ac];
-    if (!acData) { Logger.log("Row " + (i + 2) + ": unknown AC '" + ac + "', skipping."); continue; }
+    var w = resolveWeights(ac, casteCell, genderCell, ageCell);
 
-    var casteLabel  = String(casteCell).trim();
-    var genderLabel = String(genderCell).trim();
-    var ageLabel    = String(ageCell).trim();
-
-    var casteW  = casteIsText  ? (acData[casteLabel]  || 0) / 100 : parseFloat(casteCell);
-    var genderW = genderIsText ? (genderLabel === "Male" ? acData.male : acData.female) / 100 : parseFloat(genderCell);
-    var ageW    = ageIsText    ? (AGE_WEIGHTS[ageLabel] || 0) : parseFloat(ageCell);
-    var normScore = casteW * genderW * ageW;
-
-    // Write fixed values back to sheet
     var sheetRow = i + 2;
-    sheet.getRange(sheetRow, 4).setValue(casteW);
-    sheet.getRange(sheetRow, 5).setValue(genderW);
-    sheet.getRange(sheetRow, 6).setValue(ageW);
-    sheet.getRange(sheetRow, 11).setValue(normScore);
+    sheet.getRange(sheetRow, 4).setValue(w.casteW);
+    sheet.getRange(sheetRow, 5).setValue(w.genderW);
+    sheet.getRange(sheetRow, 6).setValue(w.ageW);
+    sheet.getRange(sheetRow, 11).setValue(w.norm);
 
-    Logger.log("Fixed row " + sheetRow + ": " + ac + " | " + casteLabel + " → " + casteW + " | " + genderLabel + " → " + genderW + " | " + ageLabel + " → " + ageW);
+    Logger.log("Fixed row " + sheetRow + ": " + ac +
+      " | " + casteCell + " → " + w.casteW +
+      " | " + genderCell + " → " + w.genderW +
+      " | " + ageCell + " → " + w.ageW);
     fixed++;
   }
 
@@ -183,88 +196,69 @@ function fixTextRows() {
 
 // ═══════════════════════════════════════════════════════════
 // 3. DAILY REPORT — runs at 8 PM via time-trigger
+//    Party % = party score sum / grand total × 100
 // ═══════════════════════════════════════════════════════════
 
 function generateDailyReport() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var dataSheet = ss.getSheets()[0]; // first sheet = raw data
+  var dataSheet = ss.getSheets()[0];
 
-  // Today's date string for the tab name (e.g. "24-Mar-2026")
   var today = new Date();
   var tabName = Utilities.formatDate(today, "Asia/Kolkata", "dd-MMM-yyyy");
 
-  // Delete existing tab with same name (if re-running)
   var existing = ss.getSheetByName(tabName);
   if (existing) ss.deleteSheet(existing);
 
-  // Get all data rows (skip header)
   var lastRow = dataSheet.getLastRow();
-  if (lastRow < 2) return; // no data
+  if (lastRow < 2) return;
 
   var data = dataSheet.getRange(2, 1, lastRow - 1, 11).getValues();
-  // Columns: 0=Timestamp, 1=AC, 2=FA, 3=Caste, 4=Gender, 5=Age,
-  //          6=Vote2021, 7=Vote2024, 8=Vote2026, 9=WhoWillWin, 10=NormalizedScore
 
-  // Today's date string for filtering (match dd/mm/yyyy or d/m/yyyy format)
-  var todayStr = Utilities.formatDate(today, "Asia/Kolkata", "d/M/yyyy");
+  var todayStr  = Utilities.formatDate(today, "Asia/Kolkata", "d/M/yyyy");
   var todayStr2 = Utilities.formatDate(today, "Asia/Kolkata", "dd/MM/yyyy");
   var todayStr3 = Utilities.formatDate(today, "Asia/Kolkata", "d/M/yy");
 
-  // Filter only today's entries
   var todayData = data.filter(function(row) {
     var ts = String(row[0]);
     return ts.indexOf(todayStr) !== -1 || ts.indexOf(todayStr2) !== -1 || ts.indexOf(todayStr3) !== -1;
   });
 
-  if (todayData.length === 0) return; // no entries today
+  if (todayData.length === 0) return;
 
-  // Parties we track
   var parties = ["LDF", "UDF", "BJP/NDA", "Others"];
 
-  // Build AC → party → { sum, count }
   var acMap = {};
   for (var i = 0; i < todayData.length; i++) {
     var row = todayData[i];
-    var ac = String(row[1]).trim();
+    var ac    = String(row[1]).trim();
     var party = String(row[9]).trim();
     var score = parseFloat(row[10]) || 0;
 
     if (!acMap[ac]) {
       acMap[ac] = {};
-      for (var p = 0; p < parties.length; p++) {
-        acMap[ac][parties[p]] = { sum: 0, count: 0 };
-      }
+      for (var p = 0; p < parties.length; p++) acMap[ac][parties[p]] = { sum: 0, count: 0 };
     }
-
     if (acMap[ac][party]) {
       acMap[ac][party].sum += score;
       acMap[ac][party].count += 1;
     }
   }
 
-  // Create report sheet
   var reportSheet = ss.insertSheet(tabName);
 
-  // Header row
   var header = [
-    "Assembly Constituency",
-    "Total Entries",
-    "LDF %",
-    "UDF %",
-    "BJP/NDA %",
-    "Others %",
+    "Assembly Constituency", "Total Entries",
+    "LDF %", "UDF %", "BJP/NDA %", "Others %",
     "Predicted Winner"
   ];
   reportSheet.getRange(1, 1, 1, header.length).setValues([header]);
 
-  // Style header
   var headerRange = reportSheet.getRange(1, 1, 1, header.length);
-  headerRange.setBackground("#ff9933");
+  headerRange.setBackground("#1d4ed8");
   headerRange.setFontColor("#ffffff");
   headerRange.setFontWeight("bold");
   headerRange.setHorizontalAlignment("center");
 
-  // Fill data rows
   var acNames = Object.keys(acMap).sort();
   var reportRows = [];
 
@@ -275,7 +269,6 @@ function generateDailyReport() {
     var partySums = {};
     var grandTotal = 0;
 
-    // Sum normalized scores per party and grand total
     for (var p = 0; p < parties.length; p++) {
       var pt = parties[p];
       var d = partyData[pt];
@@ -284,7 +277,6 @@ function generateDailyReport() {
       grandTotal += d.sum;
     }
 
-    // Party % = (party sum / grand total) × 100
     var partyPct = {};
     var maxPct = -1;
     var winner = "-";
@@ -311,21 +303,11 @@ function generateDailyReport() {
 
   if (reportRows.length > 0) {
     reportSheet.getRange(2, 1, reportRows.length, header.length).setValues(reportRows);
+    reportSheet.getRange(2, 7, reportRows.length, 1).setFontWeight("bold").setFontColor("#1d4ed8");
   }
 
-  // Auto-resize columns
-  for (var c = 1; c <= header.length; c++) {
-    reportSheet.autoResizeColumn(c);
-  }
+  for (var c = 1; c <= header.length; c++) reportSheet.autoResizeColumn(c);
 
-  // Highlight winner column with green
-  if (reportRows.length > 0) {
-    var winnerRange = reportSheet.getRange(2, 7, reportRows.length, 1);
-    winnerRange.setFontWeight("bold");
-    winnerRange.setFontColor("#138808");
-  }
-
-  // Add summary row at the bottom
   var summaryRow = reportRows.length + 3;
   reportSheet.getRange(summaryRow, 1).setValue("Report generated at:");
   reportSheet.getRange(summaryRow, 2).setValue(
