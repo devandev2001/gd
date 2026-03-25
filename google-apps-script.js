@@ -249,10 +249,10 @@ function generateDailyReport() {
   var header = [
     "Assembly Constituency",
     "Total Entries",
-    "LDF Avg",
-    "UDF Avg",
-    "BJP/NDA Avg",
-    "Others Avg",
+    "LDF %",
+    "UDF %",
+    "BJP/NDA %",
+    "Others %",
     "Predicted Winner"
   ];
   reportSheet.getRange(1, 1, 1, header.length).setValues([header]);
@@ -272,17 +272,28 @@ function generateDailyReport() {
     var acName = acNames[a];
     var partyData = acMap[acName];
     var totalEntries = 0;
-    var avgs = {};
-    var maxAvg = -1;
-    var winner = "-";
+    var partySums = {};
+    var grandTotal = 0;
 
+    // Sum normalized scores per party and grand total
     for (var p = 0; p < parties.length; p++) {
       var pt = parties[p];
       var d = partyData[pt];
       totalEntries += d.count;
-      avgs[pt] = d.count > 0 ? d.sum / d.count : 0;
-      if (avgs[pt] > maxAvg) {
-        maxAvg = avgs[pt];
+      partySums[pt] = d.sum;
+      grandTotal += d.sum;
+    }
+
+    // Party % = (party sum / grand total) × 100
+    var partyPct = {};
+    var maxPct = -1;
+    var winner = "-";
+
+    for (var p = 0; p < parties.length; p++) {
+      var pt = parties[p];
+      partyPct[pt] = grandTotal > 0 ? (partySums[pt] / grandTotal) * 100 : 0;
+      if (partyPct[pt] > maxPct) {
+        maxPct = partyPct[pt];
         winner = pt;
       }
     }
@@ -290,11 +301,11 @@ function generateDailyReport() {
     reportRows.push([
       acName,
       totalEntries,
-      avgs["LDF"] ? avgs["LDF"].toFixed(8) : "0",
-      avgs["UDF"] ? avgs["UDF"].toFixed(8) : "0",
-      avgs["BJP/NDA"] ? avgs["BJP/NDA"].toFixed(8) : "0",
-      avgs["Others"] ? avgs["Others"].toFixed(8) : "0",
-      maxAvg > 0 ? winner : "No data"
+      partyPct["LDF"].toFixed(2) + "%",
+      partyPct["UDF"].toFixed(2) + "%",
+      partyPct["BJP/NDA"].toFixed(2) + "%",
+      partyPct["Others"].toFixed(2) + "%",
+      grandTotal > 0 ? winner : "No data"
     ]);
   }
 
