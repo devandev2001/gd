@@ -74,6 +74,7 @@ var AGE_WEIGHTS = {
 
 var CASTE_LIST = ["Nair","Ezhava","Muslim","Christian","SC/ST","Others"];
 var GENDER_LIST = ["Male","Female"];
+var VOTE2026_PARTIES = ["LDF", "UDF", "BJP/NDA", "NDA", "Others"];
 
 function isTextLabel(val) {
   var s = String(val).trim();
@@ -114,6 +115,18 @@ function resolveWeights(ac, casteVal, genderVal, ageVal) {
   return { casteW: casteW, genderW: genderW, ageW: ageW, norm: casteW * genderW * ageW };
 }
 
+function vote2026NormFor(vote2026Val, normVal) {
+  var v = String(vote2026Val || "").trim();
+  return VOTE2026_PARTIES.indexOf(v) !== -1 ? normVal : 0;
+}
+
+function ensureVote2026NormalizedColumn(sheet) {
+  var header = String(sheet.getRange(1, 12).getValue() || "").trim();
+  if (header !== "Vote 2026 Normalized") {
+    sheet.getRange(1, 12).setValue("Vote 2026 Normalized");
+  }
+}
+
 // ═══════════════════════════════════════════════════════════
 // 1. RECEIVE FORM SUBMISSIONS
 //    Now auto-converts text labels to numbers server-side
@@ -129,11 +142,13 @@ function doPost(e) {
         "Timestamp", "Assembly Constituency", "FA Name",
         "Caste Weight", "Gender Weight", "Age Weight",
         "Vote in 2021 AE", "Vote in 2024 GE", "Vote in 2026 AE",
-        "Who Will Win", "Who Will Win Normalized"
+        "Who Will Win", "Who Will Win Normalized", "Vote 2026 Normalized"
       ]);
     }
+    ensureVote2026NormalizedColumn(sheet);
 
     var w = resolveWeights(data.ac, data.caste, data.gender, data.age);
+    var vote2026Norm = vote2026NormFor(data.vote2026, w.norm);
 
     sheet.appendRow([
       data.timestamp,
@@ -146,12 +161,13 @@ function doPost(e) {
       data.vote2024,
       data.vote2026,
       data.whoWillWin,
-      w.norm
+      w.norm,
+      vote2026Norm
     ]);
 
     var lr = sheet.getLastRow();
-    sheet.getRange(lr, 4, lr, 6).setNumberFormat("0.00000000");
-    sheet.getRange(lr, 11).setNumberFormat("0.0000000000");
+    sheet.getRange(lr, 4, 1, 3).setNumberFormat("0.00000000");
+    sheet.getRange(lr, 11, 1, 2).setNumberFormat("0.0000000000");
 
     return ContentService
       .createTextOutput(JSON.stringify({ status: "success" }))
@@ -301,7 +317,7 @@ function rowMatchesDateFilter(row, dateStr) {
 
 function mapRowsToEntries(filtered) {
   var headers = ["timestamp","ac","faName","casteWeight","genderWeight","ageWeight",
-                 "vote2021","vote2024","vote2026","whoWillWin","normalizedScore"];
+                 "vote2021","vote2024","vote2026","whoWillWin","normalizedScore","vote2026Normalized"];
   return filtered.map(function(row) {
     var obj = {};
     headers.forEach(function(h, i) { obj[h] = row[i]; });
@@ -316,7 +332,7 @@ function getEntriesForDate(dateStr) {
   if (lastRow < 2) return { entries: [], total: 0 };
 
   // Rows 2 … lastRow (row 1 = header). Do not use lastRow-1 — that drops the final data row.
-  var data = sheet.getRange(2, 1, lastRow, 11).getValues();
+  var data = sheet.getRange(2, 1, lastRow, 12).getValues();
 
   var filtered = dateStr
     ? data.filter(function(row) { return rowMatchesDateFilter(row, dateStr); })
@@ -332,7 +348,7 @@ function getEntriesForDateRange(fromYmd, toYmd) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { entries: [], total: 0 };
 
-  var data = sheet.getRange(2, 1, lastRow, 11).getValues();
+  var data = sheet.getRange(2, 1, lastRow, 12).getValues();
   var filtered = data.filter(function(row) {
     var rowYmd = cellToYmdKolkata(row[0]);
     if (rowYmd) return rowYmd >= fromYmd && rowYmd <= toYmd;
@@ -387,7 +403,7 @@ function fixTextRows() {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) { Logger.log("No data rows found."); return; }
 
-  var data = sheet.getRange(2, 1, lastRow, 11).getValues();
+  var data = sheet.getRange(2, 1, lastRow, 12).getValues();
   var fixed = 0;
 
   for (var i = 0; i < data.length; i++) {
@@ -410,6 +426,7 @@ function fixTextRows() {
     sheet.getRange(sheetRow, 5).setValue(w.genderW);
     sheet.getRange(sheetRow, 6).setValue(w.ageW);
     sheet.getRange(sheetRow, 11).setValue(w.norm);
+    sheet.getRange(sheetRow, 12).setValue(vote2026NormFor(row[8], w.norm));
 
     Logger.log("Fixed row " + sheetRow + ": " + ac +
       " | " + casteCell + " → " + w.casteW +
@@ -422,8 +439,8 @@ function fixTextRows() {
 }
 
 /**
- * Recompute column K (normalized score) as (D × E × F) for every data row.
- * Use after changing AC_DEMOGRAPHICS or if K was wrong while D–F are correct.
+ * Recompute column K (Who Will Win Normalized) and column L (Vote 2026 Normalized)
+ * from D × E × F for every data row.
  */
 function recalcAllNormalizedScores() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
@@ -432,7 +449,8 @@ function recalcAllNormalizedScores() {
     Logger.log("No data rows.");
     return;
   }
-  var data = sheet.getRange(2, 1, lr, 11).getValues();
+  var data = sheet.getRange(2, 1, lr, 12).getValues();
+  ensureVote2026NormalizedColumn(sheet);
   var updated = 0;
   for (var i = 0; i < data.length; i++) {
     var cw = Number(data[i][3]);
@@ -440,11 +458,13 @@ function recalcAllNormalizedScores() {
     var aw = Number(data[i][5]);
     if (!isFinite(cw) || !isFinite(gw) || !isFinite(aw)) continue;
     var norm = cw * gw * aw;
+    var vote2026Norm = vote2026NormFor(data[i][8], norm);
     sheet.getRange(i + 2, 11).setValue(norm);
+    sheet.getRange(i + 2, 12).setValue(vote2026Norm);
     updated++;
   }
-  sheet.getRange(2, 4, lr, 6).setNumberFormat("0.00000000");
-  sheet.getRange(2, 11, lr, 11).setNumberFormat("0.0000000000");
+  sheet.getRange(2, 4, lr, 3).setNumberFormat("0.00000000");
+  sheet.getRange(2, 11, lr, 2).setNumberFormat("0.0000000000");
   Logger.log("recalcAllNormalizedScores: updated " + updated + " row(s).");
 }
 
@@ -466,7 +486,7 @@ function generateDailyReport() {
   var lastRow = dataSheet.getLastRow();
   if (lastRow < 2) return;
 
-  var data = dataSheet.getRange(2, 1, lastRow, 11).getValues();
+  var data = dataSheet.getRange(2, 1, lastRow, 12).getValues();
 
   var todayStr  = Utilities.formatDate(today, "Asia/Kolkata", "d/M/yyyy");
   var todayStr2 = Utilities.formatDate(today, "Asia/Kolkata", "dd/MM/yyyy");
