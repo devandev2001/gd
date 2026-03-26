@@ -61,6 +61,11 @@ export const constituencyData = [
     fa2: "Sreehari Babu",
   },
   {
+    ac: "Kanjirappally",
+    fa1: "Gokul PG",
+    fa2: "Harikrishnan AB",
+  },
+  {
     ac: "Pala",
     fa1: "Anirudh Vinod",
     fa2: "Sajan P Nair",

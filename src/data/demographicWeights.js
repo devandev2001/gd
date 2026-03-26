@@ -58,6 +58,10 @@ export const acDemographics = {
     male: 49.51, female: 50.49,
     Nair: 7.30, Ezhava: 15.11, Muslim: 20.39, Christian: 11.37, "SC/ST": 11.37, Others: 2.45,
   },
+  Kanjirappally: {
+    male: 48.55, female: 51.45,
+    Nair: 23.92, Ezhava: 12.00, Muslim: 10.20, Christian: 9.08, "SC/ST": 9.08, Others: 3.40,
+  },
   Pala: {
     male: 48.71, female: 51.29,
     Nair: 16.41, Ezhava: 13.73, Muslim: 1.58, Christian: 8.39, "SC/ST": 8.39, Others: 2.20,

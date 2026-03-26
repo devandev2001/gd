@@ -45,6 +45,7 @@ var AC_DEMOGRAPHICS = {
   Chengannur:         { male:47.64, female:52.35, Nair:29.92, Ezhava:15.54, Muslim:3.89,  Christian:15.75, "SC/ST":15.75, Others:5.71  },
   Adoor:              { male:47.21, female:52.79, Nair:25.15, Ezhava:19.69, Muslim:6.80,  Christian:18.60, "SC/ST":18.60, Others:1.84  },
   Poonjar:            { male:49.51, female:50.49, Nair:7.30,  Ezhava:15.11, Muslim:20.39, Christian:11.37, "SC/ST":11.37, Others:2.45  },
+  Kanjirappally:      { male:48.55, female:51.45, Nair:23.92, Ezhava:12.00, Muslim:10.20, Christian:9.08,  "SC/ST":9.08,  Others:3.40  },
   Pala:               { male:48.71, female:51.29, Nair:16.41, Ezhava:13.73, Muslim:1.58,  Christian:8.39,  "SC/ST":8.39,  Others:2.20  },
   Thrissur:           { male:47.55, female:52.45, Nair:18.03, Ezhava:17.11, Muslim:5.20,  Christian:7.66,  "SC/ST":7.66,  Others:8.61  },
   Kunnathunad:        { male:48.85, female:51.14, Nair:11.78, Ezhava:14.57, Muslim:19.70, Christian:12.69, "SC/ST":12.69, Others:4.36  },
