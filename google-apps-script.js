@@ -454,7 +454,7 @@ function recalcAllNormalizedScores() {
 // ═══════════════════════════════════════════════════════════
 
 function buildWeightedReportRows(dataRows, partyColumnIndex) {
-  var parties = ["LDF", "UDF", "BJP/NDA", "Others"];
+  var parties = ["LDF", "UDF", "BJP/NDA"];
   var acMap = {};
 
   for (var i = 0; i < dataRows.length; i++) {
@@ -508,7 +508,6 @@ function buildWeightedReportRows(dataRows, partyColumnIndex) {
       partyPct["LDF"].toFixed(2) + "%",
       partyPct["UDF"].toFixed(2) + "%",
       partyPct["BJP/NDA"].toFixed(2) + "%",
-      partyPct["Others"].toFixed(2) + "%",
       grandTotal > 0 ? winner : "No data"
     ]);
   }
@@ -522,7 +521,7 @@ function writeDailyReportSheet(ss, tabName, title, reportRows) {
 
   var header = [
     "Assembly Constituency", "Total Entries",
-    "LDF %", "UDF %", "BJP/NDA %", "Others %",
+    "LDF %", "UDF %", "BJP/NDA %",
     "Predicted Winner"
   ];
   sheet.getRange(1, 1).setValue(title).setFontWeight("bold").setFontColor("#1d4ed8");
