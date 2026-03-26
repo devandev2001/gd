@@ -9,6 +9,7 @@ import {
   GOOGLE_SCRIPT_URL,
 } from "../data/surveyData";
 import { getWeights } from "../data/demographicWeights";
+import { formatAcSelectLabel, sortConstituenciesByAcNo } from "../data/acNumbers";
 import "./SurveyForm.css";
 
 const initialForm = {
@@ -205,9 +206,9 @@ export default function SurveyForm() {
               onChange={handleChange}
             >
               <option value="">— Select Constituency —</option>
-              {constituencyData.map((c) => (
+              {sortConstituenciesByAcNo(constituencyData).map((c) => (
                 <option key={c.ac} value={c.ac}>
-                  {c.ac}
+                  {formatAcSelectLabel(c.ac)}
                 </option>
               ))}
             </select>
