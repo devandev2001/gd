@@ -26,6 +26,11 @@
  *
  * 7. RUN fixTextRows ONCE to clean up old text rows:
  *    Select fixTextRows in dropdown → ▶ Run
+ *
+ * 8. If "Who Will Win Normalized" shows 0 but caste/gender/age look non-zero:
+ *    Deploy latest script, then run recalcAllNormalizedScores once (same menu ▶ Run).
+ *    The public form now sends caste/gender/age as labels so weights always come from
+ *    AC_DEMOGRAPHICS here — not from an old cached browser bundle.
  */
 
 // ═══════════════════════════════════════════════════════════
@@ -75,6 +80,13 @@ function isTextLabel(val) {
   return isNaN(parseFloat(s));
 }
 
+/** Parse numeric weight; keeps 0, rejects only NaN (avoids relying on truthiness of tiny floats). */
+function asFiniteNumber(val, fallback) {
+  if (val === null || val === undefined || val === "") return fallback;
+  var n = typeof val === "number" ? val : parseFloat(String(val).replace(/,/g, ""));
+  return isFinite(n) ? n : fallback;
+}
+
 function resolveWeights(ac, casteVal, genderVal, ageVal) {
   var acData = AC_DEMOGRAPHICS[ac];
   var casteW, genderW, ageW;
@@ -82,20 +94,20 @@ function resolveWeights(ac, casteVal, genderVal, ageVal) {
   if (isTextLabel(casteVal)) {
     casteW = acData ? (acData[String(casteVal).trim()] || 0) / 100 : 0;
   } else {
-    casteW = parseFloat(casteVal) || 0;
+    casteW = asFiniteNumber(casteVal, 0);
   }
 
   if (isTextLabel(genderVal)) {
     var g = String(genderVal).trim();
     genderW = acData ? (g === "Male" ? acData.male : acData.female) / 100 : 0;
   } else {
-    genderW = parseFloat(genderVal) || 0;
+    genderW = asFiniteNumber(genderVal, 0);
   }
 
   if (isTextLabel(ageVal)) {
     ageW = AGE_WEIGHTS[String(ageVal).trim()] || 0;
   } else {
-    ageW = parseFloat(ageVal) || 0;
+    ageW = asFiniteNumber(ageVal, 0);
   }
 
   return { casteW: casteW, genderW: genderW, ageW: ageW, norm: casteW * genderW * ageW };
@@ -135,6 +147,10 @@ function doPost(e) {
       data.whoWillWin,
       w.norm
     ]);
+
+    var lr = sheet.getLastRow();
+    sheet.getRange(lr, 4, lr, 6).setNumberFormat("0.00000000");
+    sheet.getRange(lr, 11).setNumberFormat("0.0000000000");
 
     return ContentService
       .createTextOutput(JSON.stringify({ status: "success" }))
@@ -404,6 +420,33 @@ function fixTextRows() {
   Logger.log("Done. Fixed " + fixed + " row(s).");
 }
 
+/**
+ * Recompute column K (normalized score) as (D × E × F) for every data row.
+ * Use after changing AC_DEMOGRAPHICS or if K was wrong while D–F are correct.
+ */
+function recalcAllNormalizedScores() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var lr = sheet.getLastRow();
+  if (lr < 2) {
+    Logger.log("No data rows.");
+    return;
+  }
+  var data = sheet.getRange(2, 1, lr, 11).getValues();
+  var updated = 0;
+  for (var i = 0; i < data.length; i++) {
+    var cw = Number(data[i][3]);
+    var gw = Number(data[i][4]);
+    var aw = Number(data[i][5]);
+    if (!isFinite(cw) || !isFinite(gw) || !isFinite(aw)) continue;
+    var norm = cw * gw * aw;
+    sheet.getRange(i + 2, 11).setValue(norm);
+    updated++;
+  }
+  sheet.getRange(2, 4, lr, 6).setNumberFormat("0.00000000");
+  sheet.getRange(2, 11, lr, 11).setNumberFormat("0.0000000000");
+  Logger.log("recalcAllNormalizedScores: updated " + updated + " row(s).");
+}
+
 // ═══════════════════════════════════════════════════════════
 // 3. DAILY REPORT — runs at 8 PM via time-trigger
 //    Party % = party score sum / grand total × 100
@@ -442,7 +485,7 @@ function generateDailyReport() {
     var row = todayData[i];
     var ac    = String(row[1]).trim();
     var party = String(row[9]).trim();
-    var score = parseFloat(row[10]) || 0;
+    var score = asFiniteNumber(row[10], 0);
 
     if (!acMap[ac]) {
       acMap[ac] = {};

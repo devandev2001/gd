@@ -8,7 +8,6 @@ import {
   winOptions,
   GOOGLE_SCRIPT_URL,
 } from "../data/surveyData";
-import { getWeights } from "../data/demographicWeights";
 import { formatAcSelectLabel, sortConstituenciesByAcNo } from "../data/acNumbers";
 import "./SurveyForm.css";
 
@@ -105,31 +104,21 @@ export default function SurveyForm() {
     setSubmitting(true);
 
     try {
-      // Look up demographic weights
-      const { casteWeight, genderWeight, ageWeight } = getWeights(
-        form.ac,
-        form.caste,
-        form.gender,
-        form.age
-      );
-
-      // Normalized score = caste × gender × age
-      const normalizedScore = casteWeight * genderWeight * ageWeight;
-
+      // Send labels only — Google Apps Script resolves weights from AC_DEMOGRAPHICS
+      // so scores stay correct after you update the script (avoids stale cached JS sending 0).
       const payload = {
         timestamp: new Date().toLocaleString("en-IN", {
           timeZone: "Asia/Kolkata",
         }),
         ac: form.ac,
         faName: form.faName,
-        caste: casteWeight,     // caste % / 100
-        gender: genderWeight,   // gender % / 100
-        age: ageWeight,         // Age Normal from Sheet2
+        caste: form.caste,
+        gender: form.gender,
+        age: form.age,
         vote2021: form.vote2021,
         vote2024: form.vote2024,
         vote2026: form.vote2026,
         whoWillWin: form.whoWillWin,
-        normalizedScore: normalizedScore,  // caste × gender × age
       };
 
       await fetch(GOOGLE_SCRIPT_URL, {
