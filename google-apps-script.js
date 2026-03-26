@@ -74,7 +74,6 @@ var AGE_WEIGHTS = {
 
 var CASTE_LIST = ["Nair","Ezhava","Muslim","Christian","SC/ST","Others"];
 var GENDER_LIST = ["Male","Female"];
-var VOTE2026_PARTIES = ["LDF", "UDF", "BJP/NDA", "NDA", "Others"];
 
 function isTextLabel(val) {
   var s = String(val).trim();
@@ -115,18 +114,6 @@ function resolveWeights(ac, casteVal, genderVal, ageVal) {
   return { casteW: casteW, genderW: genderW, ageW: ageW, norm: casteW * genderW * ageW };
 }
 
-function vote2026NormFor(vote2026Val, normVal) {
-  var v = String(vote2026Val || "").trim();
-  return VOTE2026_PARTIES.indexOf(v) !== -1 ? normVal : 0;
-}
-
-function ensureVote2026NormalizedColumn(sheet) {
-  var header = String(sheet.getRange(1, 12).getValue() || "").trim();
-  if (header !== "Vote 2026 Normalized") {
-    sheet.getRange(1, 12).setValue("Vote 2026 Normalized");
-  }
-}
-
 // ═══════════════════════════════════════════════════════════
 // 1. RECEIVE FORM SUBMISSIONS
 //    Now auto-converts text labels to numbers server-side
@@ -142,13 +129,11 @@ function doPost(e) {
         "Timestamp", "Assembly Constituency", "FA Name",
         "Caste Weight", "Gender Weight", "Age Weight",
         "Vote in 2021 AE", "Vote in 2024 GE", "Vote in 2026 AE",
-        "Who Will Win", "Who Will Win Normalized", "Vote 2026 Normalized"
+        "Who Will Win", "Who Will Win Normalized"
       ]);
     }
-    ensureVote2026NormalizedColumn(sheet);
 
     var w = resolveWeights(data.ac, data.caste, data.gender, data.age);
-    var vote2026Norm = vote2026NormFor(data.vote2026, w.norm);
 
     sheet.appendRow([
       data.timestamp,
@@ -161,13 +146,12 @@ function doPost(e) {
       data.vote2024,
       data.vote2026,
       data.whoWillWin,
-      w.norm,
-      vote2026Norm
+      w.norm
     ]);
 
     var lr = sheet.getLastRow();
-    sheet.getRange(lr, 4, 1, 3).setNumberFormat("0.00000000");
-    sheet.getRange(lr, 11, 1, 2).setNumberFormat("0.0000000000");
+    sheet.getRange(lr, 4, lr, 6).setNumberFormat("0.00000000");
+    sheet.getRange(lr, 11).setNumberFormat("0.0000000000");
 
     return ContentService
       .createTextOutput(JSON.stringify({ status: "success" }))
@@ -317,7 +301,7 @@ function rowMatchesDateFilter(row, dateStr) {
 
 function mapRowsToEntries(filtered) {
   var headers = ["timestamp","ac","faName","casteWeight","genderWeight","ageWeight",
-                 "vote2021","vote2024","vote2026","whoWillWin","normalizedScore","vote2026Normalized"];
+                 "vote2021","vote2024","vote2026","whoWillWin","normalizedScore"];
   return filtered.map(function(row) {
     var obj = {};
     headers.forEach(function(h, i) { obj[h] = row[i]; });
@@ -332,7 +316,7 @@ function getEntriesForDate(dateStr) {
   if (lastRow < 2) return { entries: [], total: 0 };
 
   // Rows 2 … lastRow (row 1 = header). Do not use lastRow-1 — that drops the final data row.
-  var data = sheet.getRange(2, 1, lastRow, 12).getValues();
+  var data = sheet.getRange(2, 1, lastRow, 11).getValues();
 
   var filtered = dateStr
     ? data.filter(function(row) { return rowMatchesDateFilter(row, dateStr); })
@@ -348,7 +332,7 @@ function getEntriesForDateRange(fromYmd, toYmd) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { entries: [], total: 0 };
 
-  var data = sheet.getRange(2, 1, lastRow, 12).getValues();
+  var data = sheet.getRange(2, 1, lastRow, 11).getValues();
   var filtered = data.filter(function(row) {
     var rowYmd = cellToYmdKolkata(row[0]);
     if (rowYmd) return rowYmd >= fromYmd && rowYmd <= toYmd;
@@ -403,7 +387,7 @@ function fixTextRows() {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) { Logger.log("No data rows found."); return; }
 
-  var data = sheet.getRange(2, 1, lastRow, 12).getValues();
+  var data = sheet.getRange(2, 1, lastRow, 11).getValues();
   var fixed = 0;
 
   for (var i = 0; i < data.length; i++) {
@@ -426,7 +410,6 @@ function fixTextRows() {
     sheet.getRange(sheetRow, 5).setValue(w.genderW);
     sheet.getRange(sheetRow, 6).setValue(w.ageW);
     sheet.getRange(sheetRow, 11).setValue(w.norm);
-    sheet.getRange(sheetRow, 12).setValue(vote2026NormFor(row[8], w.norm));
 
     Logger.log("Fixed row " + sheetRow + ": " + ac +
       " | " + casteCell + " → " + w.casteW +
@@ -439,8 +422,8 @@ function fixTextRows() {
 }
 
 /**
- * Recompute column K (Who Will Win Normalized) and column L (Vote 2026 Normalized)
- * from D × E × F for every data row.
+ * Recompute column K (normalized score) as (D × E × F) for every data row.
+ * Use after changing AC_DEMOGRAPHICS or if K was wrong while D–F are correct.
  */
 function recalcAllNormalizedScores() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
@@ -449,8 +432,7 @@ function recalcAllNormalizedScores() {
     Logger.log("No data rows.");
     return;
   }
-  var data = sheet.getRange(2, 1, lr, 12).getValues();
-  ensureVote2026NormalizedColumn(sheet);
+  var data = sheet.getRange(2, 1, lr, 11).getValues();
   var updated = 0;
   for (var i = 0; i < data.length; i++) {
     var cw = Number(data[i][3]);
@@ -458,13 +440,11 @@ function recalcAllNormalizedScores() {
     var aw = Number(data[i][5]);
     if (!isFinite(cw) || !isFinite(gw) || !isFinite(aw)) continue;
     var norm = cw * gw * aw;
-    var vote2026Norm = vote2026NormFor(data[i][8], norm);
     sheet.getRange(i + 2, 11).setValue(norm);
-    sheet.getRange(i + 2, 12).setValue(vote2026Norm);
     updated++;
   }
-  sheet.getRange(2, 4, lr, 3).setNumberFormat("0.00000000");
-  sheet.getRange(2, 11, lr, 2).setNumberFormat("0.0000000000");
+  sheet.getRange(2, 4, lr, 6).setNumberFormat("0.00000000");
+  sheet.getRange(2, 11, lr, 11).setNumberFormat("0.0000000000");
   Logger.log("recalcAllNormalizedScores: updated " + updated + " row(s).");
 }
 
@@ -473,39 +453,14 @@ function recalcAllNormalizedScores() {
 //    Party % = party score sum / grand total × 100
 // ═══════════════════════════════════════════════════════════
 
-function generateDailyReport() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var dataSheet = ss.getSheets()[0];
-
-  var today = new Date();
-  var tabName = Utilities.formatDate(today, "Asia/Kolkata", "dd-MMM-yyyy");
-
-  var existing = ss.getSheetByName(tabName);
-  if (existing) ss.deleteSheet(existing);
-
-  var lastRow = dataSheet.getLastRow();
-  if (lastRow < 2) return;
-
-  var data = dataSheet.getRange(2, 1, lastRow, 12).getValues();
-
-  var todayStr  = Utilities.formatDate(today, "Asia/Kolkata", "d/M/yyyy");
-  var todayStr2 = Utilities.formatDate(today, "Asia/Kolkata", "dd/MM/yyyy");
-  var todayStr3 = Utilities.formatDate(today, "Asia/Kolkata", "d/M/yy");
-
-  var todayData = data.filter(function(row) {
-    var ts = String(row[0]);
-    return ts.indexOf(todayStr) !== -1 || ts.indexOf(todayStr2) !== -1 || ts.indexOf(todayStr3) !== -1;
-  });
-
-  if (todayData.length === 0) return;
-
+function buildWeightedReportRows(dataRows, partyColumnIndex) {
   var parties = ["LDF", "UDF", "BJP/NDA", "Others"];
-
   var acMap = {};
-  for (var i = 0; i < todayData.length; i++) {
-    var row = todayData[i];
-    var ac    = String(row[1]).trim();
-    var party = String(row[9]).trim();
+
+  for (var i = 0; i < dataRows.length; i++) {
+    var row = dataRows[i];
+    var ac = String(row[1]).trim();
+    var party = String(row[partyColumnIndex]).trim();
     var score = asFiniteNumber(row[10], 0);
 
     if (!acMap[ac]) {
@@ -518,24 +473,8 @@ function generateDailyReport() {
     }
   }
 
-  var reportSheet = ss.insertSheet(tabName);
-
-  var header = [
-    "Assembly Constituency", "Total Entries",
-    "LDF %", "UDF %", "BJP/NDA %", "Others %",
-    "Predicted Winner"
-  ];
-  reportSheet.getRange(1, 1, 1, header.length).setValues([header]);
-
-  var headerRange = reportSheet.getRange(1, 1, 1, header.length);
-  headerRange.setBackground("#1d4ed8");
-  headerRange.setFontColor("#ffffff");
-  headerRange.setFontWeight("bold");
-  headerRange.setHorizontalAlignment("center");
-
   var acNames = Object.keys(acMap).sort();
   var reportRows = [];
-
   for (var a = 0; a < acNames.length; a++) {
     var acName = acNames[a];
     var partyData = acMap[acName];
@@ -543,8 +482,8 @@ function generateDailyReport() {
     var partySums = {};
     var grandTotal = 0;
 
-    for (var p = 0; p < parties.length; p++) {
-      var pt = parties[p];
+    for (var p2 = 0; p2 < parties.length; p2++) {
+      var pt = parties[p2];
       var d = partyData[pt];
       totalEntries += d.count;
       partySums[pt] = d.sum;
@@ -554,13 +493,12 @@ function generateDailyReport() {
     var partyPct = {};
     var maxPct = -1;
     var winner = "-";
-
-    for (var p = 0; p < parties.length; p++) {
-      var pt = parties[p];
-      partyPct[pt] = grandTotal > 0 ? (partySums[pt] / grandTotal) * 100 : 0;
-      if (partyPct[pt] > maxPct) {
-        maxPct = partyPct[pt];
-        winner = pt;
+    for (var p3 = 0; p3 < parties.length; p3++) {
+      var pty = parties[p3];
+      partyPct[pty] = grandTotal > 0 ? (partySums[pty] / grandTotal) * 100 : 0;
+      if (partyPct[pty] > maxPct) {
+        maxPct = partyPct[pty];
+        winner = pty;
       }
     }
 
@@ -574,18 +512,63 @@ function generateDailyReport() {
       grandTotal > 0 ? winner : "No data"
     ]);
   }
+  return reportRows;
+}
+
+function writeDailyReportSheet(ss, tabName, title, reportRows) {
+  var existing = ss.getSheetByName(tabName);
+  if (existing) ss.deleteSheet(existing);
+  var sheet = ss.insertSheet(tabName);
+
+  var header = [
+    "Assembly Constituency", "Total Entries",
+    "LDF %", "UDF %", "BJP/NDA %", "Others %",
+    "Predicted Winner"
+  ];
+  sheet.getRange(1, 1).setValue(title).setFontWeight("bold").setFontColor("#1d4ed8");
+  sheet.getRange(2, 1, 1, header.length).setValues([header]);
+  var headerRange = sheet.getRange(2, 1, 1, header.length);
+  headerRange.setBackground("#1d4ed8");
+  headerRange.setFontColor("#ffffff");
+  headerRange.setFontWeight("bold");
+  headerRange.setHorizontalAlignment("center");
 
   if (reportRows.length > 0) {
-    reportSheet.getRange(2, 1, reportRows.length, header.length).setValues(reportRows);
-    reportSheet.getRange(2, 7, reportRows.length, 1).setFontWeight("bold").setFontColor("#1d4ed8");
+    sheet.getRange(3, 1, reportRows.length, header.length).setValues(reportRows);
+    sheet.getRange(3, 7, reportRows.length, 1).setFontWeight("bold").setFontColor("#1d4ed8");
   }
 
-  for (var c = 1; c <= header.length; c++) reportSheet.autoResizeColumn(c);
-
-  var summaryRow = reportRows.length + 3;
-  reportSheet.getRange(summaryRow, 1).setValue("Report generated at:");
-  reportSheet.getRange(summaryRow, 2).setValue(
+  for (var c = 1; c <= header.length; c++) sheet.autoResizeColumn(c);
+  var summaryRow = reportRows.length + 5;
+  sheet.getRange(summaryRow, 1).setValue("Report generated at:");
+  sheet.getRange(summaryRow, 2).setValue(
     Utilities.formatDate(new Date(), "Asia/Kolkata", "dd-MMM-yyyy hh:mm a")
   );
-  reportSheet.getRange(summaryRow, 1, 1, 2).setFontStyle("italic").setFontColor("#718096");
+  sheet.getRange(summaryRow, 1, 1, 2).setFontStyle("italic").setFontColor("#718096");
+}
+
+function generateDailyReport() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var dataSheet = ss.getSheets()[0];
+  var today = new Date();
+  var baseName = Utilities.formatDate(today, "Asia/Kolkata", "dd-MMM-yyyy");
+
+  var lastRow = dataSheet.getLastRow();
+  if (lastRow < 2) return;
+  var data = dataSheet.getRange(2, 1, lastRow, 11).getValues();
+
+  var todayStr = Utilities.formatDate(today, "Asia/Kolkata", "d/M/yyyy");
+  var todayStr2 = Utilities.formatDate(today, "Asia/Kolkata", "dd/MM/yyyy");
+  var todayStr3 = Utilities.formatDate(today, "Asia/Kolkata", "d/M/yy");
+  var todayData = data.filter(function(row) {
+    var ts = String(row[0]);
+    return ts.indexOf(todayStr) !== -1 || ts.indexOf(todayStr2) !== -1 || ts.indexOf(todayStr3) !== -1;
+  });
+  if (todayData.length === 0) return;
+
+  var wwRows = buildWeightedReportRows(todayData, 9);   // whoWillWin
+  var v26Rows = buildWeightedReportRows(todayData, 8);  // vote2026
+
+  writeDailyReportSheet(ss, baseName + "-WW", "Who Will Win (weighted by normalized score)", wwRows);
+  writeDailyReportSheet(ss, baseName + "-V26", "Vote 2026 (weighted by normalized score)", v26Rows);
 }
