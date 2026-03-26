@@ -49,6 +49,8 @@ export default function SurveyForm() {
   const faNames = selectedAC
     ? [selectedAC.fa1, selectedAC.fa2].filter(Boolean)
     : [];
+  /** ACs in surveyData with no FA rows yet — free-text FA name */
+  const faNameIsText = Boolean(form.ac && selectedAC && faNames.length === 0);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -218,24 +220,39 @@ export default function SurveyForm() {
             <label htmlFor="faName">
               Field Agent (FA) Name <span className="req">*</span>
             </label>
-            <select
-              id="faName"
-              name="faName"
-              value={form.faName}
-              onChange={handleChange}
-              disabled={!form.ac}
-            >
-              <option value="">
-                {form.ac ? "— Select FA Name —" : "— Select AC first —"}
-              </option>
-              {faNames.map((name) => (
-                <option key={name} value={name}>
-                  {name}
+            {faNameIsText ? (
+              <input
+                type="text"
+                id="faName"
+                name="faName"
+                value={form.faName}
+                onChange={handleChange}
+                placeholder="Enter field assistant name"
+                autoComplete="name"
+                className="survey-text-input"
+              />
+            ) : (
+              <select
+                id="faName"
+                name="faName"
+                value={form.faName}
+                onChange={handleChange}
+                disabled={!form.ac}
+              >
+                <option value="">
+                  {form.ac ? "— Select FA Name —" : "— Select AC first —"}
                 </option>
-              ))}
-            </select>
+                {faNames.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            )}
             {hasError("faName") && (
-              <div className="field-error-text">Select a field agent</div>
+              <div className="field-error-text">
+                {faNameIsText ? "Enter the field agent name" : "Select a field agent"}
+              </div>
             )}
           </div>
         </div>

@@ -26,6 +26,10 @@ export const acDemographics = {
     male: 48.06, female: 51.93,
     Nair: 23.21, Ezhava: 8.43, Muslim: 18.00, Christian: 8.65, "SC/ST": 8.65, Others: 10.41,
   },
+  Nemom: {
+    male: 48.30, female: 51.69,
+    Nair: 30.88, Ezhava: 13.25, Muslim: 15.30, Christian: 9.30, "SC/ST": 9.30, Others: 12.63,
+  },
   Attingal: {
     male: 46.28, female: 53.72,
     Nair: 19.10, Ezhava: 28.12, Muslim: 17.30, Christian: 17.21, "SC/ST": 17.21, Others: 13.96,

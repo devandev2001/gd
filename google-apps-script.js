@@ -37,6 +37,7 @@ var AC_DEMOGRAPHICS = {
   Kovalam:            { male:48.88, female:51.11, Nair:14.71, Ezhava:14.35, Muslim:9.56,  Christian:11.49, "SC/ST":11.49, Others:12.59 },
   Vattiyoorkavu:      { male:47.56, female:52.44, Nair:35.23, Ezhava:10.24, Muslim:6.00,  Christian:9.75,  "SC/ST":9.75,  Others:12.74 },
   Thiruvananthapuram: { male:48.06, female:51.93, Nair:23.21, Ezhava:8.43,  Muslim:18.00, Christian:8.65,  "SC/ST":8.65,  Others:10.41 },
+  Nemom:              { male:48.30, female:51.69, Nair:30.88, Ezhava:13.25, Muslim:15.30, Christian:9.30,  "SC/ST":9.30,  Others:12.63 },
   Attingal:           { male:46.28, female:53.72, Nair:19.10, Ezhava:28.12, Muslim:17.30, Christian:17.21, "SC/ST":17.21, Others:13.96 },
   Chathannoor:        { male:46.81, female:53.19, Nair:26.85, Ezhava:29.60, Muslim:12.10, Christian:14.36, "SC/ST":14.36, Others:4.29  },
   Aranmula:           { male:47.95, female:52.05, Nair:20.89, Ezhava:20.89, Muslim:4.20,  Christian:15.30, "SC/ST":15.30, Others:0.86  },

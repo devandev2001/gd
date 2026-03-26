@@ -21,6 +21,11 @@ export const constituencyData = [
     fa2: "Akhil R",
   },
   {
+    ac: "Nemom",
+    fa1: "Anandhu RS",
+    fa2: "Arun R",
+  },
+  {
     ac: "Attingal",
     fa1: "Anand KS",
     fa2: "Sreehari S",

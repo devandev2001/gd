@@ -215,6 +215,28 @@
   background-color: rgba(240, 240, 240, 0.7);
 }
 
+.field-group .survey-text-input {
+  width: 100%;
+  font-size: 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(19, 136, 8, 0.22);
+  background-color: rgba(255, 255, 255, 0.9);
+  color: #2d3748;
+  min-height: 48px;
+  box-sizing: border-box;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.field-group .survey-text-input:focus {
+  border-color: #ff9933;
+  box-shadow: 0 0 0 3px rgba(255, 153, 51, 0.15);
+}
+.field-group .survey-text-input::placeholder {
+  color: #a0aec0;
+}
+
 .field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -425,6 +447,7 @@
 
 /* ---------- Per-field Validation Errors ---------- */
 .field-group.has-error select,
+.field-group.has-error .survey-text-input,
 .question-card.has-error select {
   border-color: #e53e3e;
   box-shadow: 0 0 0 2px rgba(229, 62, 62, 0.15);
