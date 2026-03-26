@@ -88,7 +88,7 @@ export const acDemographics = {
   },
   Manjeshwaram: {
     male: 50.38, female: 49.62,
-    Nair: 0.00, Ezhava: 12.00, Muslim: 52.89, Christian: 4.77, "SC/ST": 4.77, Others: 20.01,
+    Nair: 0.44, Ezhava: 12.00, Muslim: 52.89, Christian: 4.77, "SC/ST": 4.77, Others: 20.01,
   },
 };
 
