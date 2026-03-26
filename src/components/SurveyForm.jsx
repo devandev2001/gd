@@ -158,7 +158,7 @@ export default function SurveyForm() {
 
   return (
     <div className="survey-wrapper">
-      {/* Decorative tricolor stripe */}
+      {/* Accent stripe (navy / blue / sky) */}
       <div className="tricolor-stripe">
         <span></span><span></span><span></span>
       </div>
