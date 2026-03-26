@@ -1,24 +1,27 @@
-/* ===== Kerala Survey 2026 — Blue Theme ===== */
+/* ===== Kerala Survey 2026 — Indian Tricolor Watercolor Theme ===== */
 
 .survey-wrapper {
   min-height: 100vh;
   min-height: 100dvh;
-  background: linear-gradient(160deg, #dbeafe 0%, #eff6ff 50%, #e0f2fe 100%);
-  background-attachment: fixed;
+  /* Exact Indian tricolor watercolor background (local copy) */
+  background:
+    url("/bg-tricolor.jpg")
+      center / cover no-repeat;
+  background-attachment: scroll;
   font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
   padding: 0 0 env(safe-area-inset-bottom, 20px);
-  color: #1e3a5f;
+  color: #2d3748;
   position: relative;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
 }
 
-/* Subtle blue overlay for depth */
+/* Light overlay for readability */
 .survey-wrapper::before {
   content: "";
   position: fixed;
   inset: 0;
-  background: rgba(219, 234, 254, 0.3);
+  background: rgba(255, 255, 255, 0.5);
   z-index: 0;
   pointer-events: none;
 }
@@ -37,20 +40,20 @@
 }
 .tricolor-stripe span:nth-child(1) {
   flex: 1;
-  background: #1e40af;
+  background: #ff9933;
 }
 .tricolor-stripe span:nth-child(2) {
   flex: 1;
-  background: #3b82f6;
+  background: #fff;
 }
 .tricolor-stripe span:nth-child(3) {
   flex: 1;
-  background: #0ea5e9;
+  background: #138808;
 }
 
 /* ---------- Header ---------- */
 .survey-header {
-  background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 55%, #0ea5e9 100%);
+  background: linear-gradient(135deg, #ff9933 0%, #e8870e 50%, #138808 100%);
   padding: 14px 16px;
   text-align: center;
   position: sticky;
@@ -118,7 +121,7 @@
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(29, 78, 216, 0.18);
+  border: 1px solid rgba(255, 153, 51, 0.18);
   border-radius: 14px;
   padding: 16px 14px;
   margin-bottom: 12px;
@@ -134,13 +137,13 @@
   color: #1a202c;
   margin-bottom: 14px;
   padding-bottom: 10px;
-  border-bottom: 1px solid rgba(29, 78, 216, 0.15);
+  border-bottom: 1px solid rgba(255, 153, 51, 0.15);
 }
 
 .section-number {
   width: 26px;
   height: 26px;
-  background: linear-gradient(135deg, #1d4ed8, #0ea5e9);
+  background: linear-gradient(135deg, #ff9933, #e8870e);
   border-radius: 7px;
   display: flex;
   align-items: center;
@@ -180,7 +183,7 @@
   font-size: 16px;
   padding: 12px 36px 12px 12px;
   border-radius: 10px;
-  border: 1.5px solid rgba(29, 78, 216, 0.22);
+  border: 1.5px solid rgba(19, 136, 8, 0.22);
   background-color: rgba(255, 255, 255, 0.9);
   color: #2d3748;
   appearance: none;
@@ -202,8 +205,8 @@
 
 .field-group select:focus,
 .question-card select:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+  border-color: #ff9933;
+  box-shadow: 0 0 0 3px rgba(255, 153, 51, 0.15);
 }
 
 .field-group select:disabled {
@@ -221,7 +224,7 @@
 /* ---------- Question Cards ---------- */
 .question-card {
   background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(29, 78, 216, 0.08);
+  border: 1px solid rgba(19, 136, 8, 0.08);
   border-radius: 10px;
   padding: 12px;
   margin-bottom: 10px;
@@ -244,7 +247,7 @@
 
 .q-num {
   display: inline-block;
-  background: linear-gradient(135deg, #1d4ed8, #0ea5e9);
+  background: linear-gradient(135deg, #ff9933, #e8870e);
   color: #fff;
   font-size: 11px;
   font-weight: 800;
@@ -271,9 +274,9 @@
 }
 
 .success-msg {
-  background: rgba(29, 78, 216, 0.08);
-  color: #1d4ed8;
-  border: 1px solid rgba(29, 78, 216, 0.2);
+  background: rgba(19, 136, 8, 0.1);
+  color: #138808;
+  border: 1px solid rgba(19, 136, 8, 0.2);
 }
 
 /* ---------- Success Popup Overlay ---------- */
@@ -311,7 +314,7 @@
 .popup-title {
   font-size: 20px;
   font-weight: 800;
-  color: #1d4ed8;
+  color: #138808;
   margin: 0 0 8px;
 }
 
@@ -323,7 +326,7 @@
 }
 
 .popup-btn {
-  background: linear-gradient(135deg, #1e40af 0%, #0ea5e9 100%);
+  background: linear-gradient(135deg, #ff9933 0%, #138808 100%);
   color: #fff;
   border: none;
   border-radius: 12px;
@@ -336,7 +339,7 @@
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   transition: transform 0.15s, box-shadow 0.2s;
-  box-shadow: 0 4px 14px rgba(29, 78, 216, 0.3);
+  box-shadow: 0 4px 14px rgba(255, 153, 51, 0.3);
 }
 
 .popup-btn:active {
@@ -366,7 +369,7 @@
   font-size: 16px;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, #1e40af 0%, #0ea5e9 100%);
+  background: linear-gradient(135deg, #ff9933 0%, #138808 100%);
   border: none;
   border-radius: 12px;
   cursor: pointer;
@@ -375,7 +378,7 @@
   justify-content: center;
   gap: 8px;
   transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
-  box-shadow: 0 4px 14px rgba(29, 78, 216, 0.3);
+  box-shadow: 0 4px 14px rgba(255, 153, 51, 0.3);
   font-family: inherit;
   letter-spacing: 0.3px;
   min-height: 54px;
@@ -385,12 +388,12 @@
 
 .submit-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(29, 78, 216, 0.4);
+  box-shadow: 0 6px 20px rgba(255, 153, 51, 0.4);
 }
 
 .submit-btn:active:not(:disabled) {
   transform: scale(0.98);
-  box-shadow: 0 2px 8px rgba(29, 78, 216, 0.3);
+  box-shadow: 0 2px 8px rgba(255, 153, 51, 0.3);
 }
 
 .submit-btn:disabled {

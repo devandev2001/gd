@@ -149,6 +149,11 @@ function doGet(e) {
 
   try {
     if (action === "entries") {
+      var fromP = e.parameter.from;
+      var toP = e.parameter.to;
+      if (fromP && toP) {
+        return jsonResponse(getEntriesForDateRange(String(fromP), String(toP)));
+      }
       return jsonResponse(getEntriesForDate(e.parameter.date || ""));
     }
     if (action === "summary") {
@@ -172,26 +177,150 @@ function jsonResponse(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// Returns all raw entries for a given date string (e.g. "25/3/2026")
+function pad2(n) {
+  var x = parseInt(n, 10);
+  return x < 10 ? "0" + x : String(x);
+}
+
+// Normalize timestamp cell (Date or string) to yyyy-MM-dd in Asia/Kolkata.
+function cellToYmdKolkata(cell) {
+  if (cell instanceof Date) {
+    if (isNaN(cell.getTime())) return null;
+    return Utilities.formatDate(cell, "Asia/Kolkata", "yyyy-MM-dd");
+  }
+  var s = String(cell);
+  var m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (m) {
+    var d = parseInt(m[1], 10);
+    var mo = parseInt(m[2], 10);
+    var y = parseInt(m[3], 10);
+    if (y < 100) y += 2000;
+    return y + "-" + pad2(mo) + "-" + pad2(d);
+  }
+  m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return m[1] + "-" + m[2] + "-" + m[3];
+  var monthMap = {
+    Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
+    Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12
+  };
+  var mon = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
+  if (mon) {
+    var key = mon[2].charAt(0).toUpperCase() + mon[2].slice(1).toLowerCase();
+    var moNum = monthMap[key];
+    if (moNum) return mon[3] + "-" + pad2(moNum) + "-" + pad2(mon[1]);
+  }
+  return null;
+}
+
+// API date param → yyyy-MM-dd (single-day filter).
+function parseDateParamToYmd(dateStr) {
+  if (!dateStr) return null;
+  var s = String(dateStr).trim();
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return m[1] + "-" + m[2] + "-" + m[3];
+  var monthMap = {
+    Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
+    Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12
+  };
+  var mon = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+  if (mon) {
+    var key = mon[2].charAt(0).toUpperCase() + mon[2].slice(1).toLowerCase();
+    var moNum = monthMap[key];
+    if (moNum) return mon[3] + "-" + pad2(moNum) + "-" + pad2(mon[1]);
+  }
+  var sl = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (sl) return sl[3] + "-" + pad2(sl[2]) + "-" + pad2(sl[1]);
+  return null;
+}
+
+// Builds substring patterns that may appear in Sheet1 timestamps for the same calendar day.
+// Summary tabs use "dd-MMM-yyyy" (e.g. 25-Mar-2026) but form timestamps usually use d/M/yyyy.
+function timestampPatternsForDateKey(dateStr) {
+  var tz = "Asia/Kolkata";
+  var patterns = [String(dateStr)];
+  var monthMap = {
+    Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
+    Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12
+  };
+  var mon = dateStr.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+  if (mon) {
+    var day = parseInt(mon[1], 10);
+    var year = parseInt(mon[3], 10);
+    var key = mon[2].charAt(0).toUpperCase() + mon[2].slice(1).toLowerCase();
+    var mo = monthMap[key];
+    if (mo) {
+      var cal = new Date(year, mo - 1, day);
+      patterns.push(Utilities.formatDate(cal, tz, "d/M/yyyy"));
+      patterns.push(Utilities.formatDate(cal, tz, "dd/MM/yyyy"));
+      patterns.push(Utilities.formatDate(cal, tz, "d/M/yy"));
+      patterns.push(Utilities.formatDate(cal, tz, "dd/MM/yy"));
+      patterns.push(Utilities.formatDate(cal, tz, "yyyy-MM-dd"));
+    }
+  }
+  return patterns;
+}
+
+function legacySubstringRowMatch(row, dateStr) {
+  if (!dateStr) return true;
+  var ts = String(row[0]);
+  var patterns = timestampPatternsForDateKey(dateStr);
+  for (var i = 0; i < patterns.length; i++) {
+    if (ts.indexOf(patterns[i]) !== -1) return true;
+  }
+  return false;
+}
+
+function rowMatchesDateFilter(row, dateStr) {
+  if (!dateStr) return true;
+  var targetYmd = parseDateParamToYmd(dateStr);
+  if (targetYmd) {
+    var rowYmd = cellToYmdKolkata(row[0]);
+    if (rowYmd) return rowYmd === targetYmd;
+  }
+  return legacySubstringRowMatch(row, dateStr);
+}
+
+function mapRowsToEntries(filtered) {
+  var headers = ["timestamp","ac","faName","casteWeight","genderWeight","ageWeight",
+                 "vote2021","vote2024","vote2026","whoWillWin","normalizedScore"];
+  return filtered.map(function(row) {
+    var obj = {};
+    headers.forEach(function(h, i) { obj[h] = row[i]; });
+    return obj;
+  });
+}
+
+// Returns all raw entries for a given date string (e.g. "2026-03-26", "25/3/2026", "25-Mar-2026")
 function getEntriesForDate(dateStr) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { entries: [], total: 0 };
 
-  var data = sheet.getRange(2, 1, lastRow - 1, 11).getValues();
-  var headers = ["timestamp","ac","faName","casteWeight","genderWeight","ageWeight",
-                 "vote2021","vote2024","vote2026","whoWillWin","normalizedScore"];
+  // Rows 2 … lastRow (row 1 = header). Do not use lastRow-1 — that drops the final data row.
+  var data = sheet.getRange(2, 1, lastRow, 11).getValues();
 
   var filtered = dateStr
-    ? data.filter(function(row) { return String(row[0]).indexOf(dateStr) !== -1; })
+    ? data.filter(function(row) { return rowMatchesDateFilter(row, dateStr); })
     : data;
 
-  var entries = filtered.map(function(row) {
-    var obj = {};
-    headers.forEach(function(h, i) { obj[h] = row[i]; });
-    return obj;
-  });
+  var entries = mapRowsToEntries(filtered);
+  return { entries: entries, total: entries.length };
+}
 
+// Inclusive range using calendar yyyy-MM-dd (matches Sheet1 timestamps, not summary tab names).
+function getEntriesForDateRange(fromYmd, toYmd) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { entries: [], total: 0 };
+
+  var data = sheet.getRange(2, 1, lastRow, 11).getValues();
+  var filtered = data.filter(function(row) {
+    var rowYmd = cellToYmdKolkata(row[0]);
+    if (rowYmd) return rowYmd >= fromYmd && rowYmd <= toYmd;
+    if (fromYmd === toYmd) return rowMatchesDateFilter(row, fromYmd);
+    return false;
+  });
+  var entries = mapRowsToEntries(filtered);
   return { entries: entries, total: entries.length };
 }
 
@@ -204,7 +333,7 @@ function getSummaryForDate(tabName) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { rows: [], tabName: tabName, found: true };
 
-  var data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+  var data = sheet.getRange(2, 1, lastRow, 7).getValues();
   var rows = data
     .filter(function(row) { return String(row[0]).trim() !== "" && String(row[0]).indexOf("Report") === -1; })
     .map(function(row) {
@@ -239,7 +368,7 @@ function fixTextRows() {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) { Logger.log("No data rows found."); return; }
 
-  var data = sheet.getRange(2, 1, lastRow - 1, 11).getValues();
+  var data = sheet.getRange(2, 1, lastRow, 11).getValues();
   var fixed = 0;
 
   for (var i = 0; i < data.length; i++) {
@@ -291,7 +420,7 @@ function generateDailyReport() {
   var lastRow = dataSheet.getLastRow();
   if (lastRow < 2) return;
 
-  var data = dataSheet.getRange(2, 1, lastRow - 1, 11).getValues();
+  var data = dataSheet.getRange(2, 1, lastRow, 11).getValues();
 
   var todayStr  = Utilities.formatDate(today, "Asia/Kolkata", "d/M/yyyy");
   var todayStr2 = Utilities.formatDate(today, "Asia/Kolkata", "dd/MM/yyyy");
