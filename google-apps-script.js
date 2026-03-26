@@ -52,7 +52,7 @@ var AC_DEMOGRAPHICS = {
   Palakkad:           { male:48.63, female:51.37, Nair:9.66,  Ezhava:22.08, Muslim:27.84, Christian:11.75, "SC/ST":11.75, Others:9.90  },
   "Kozhikode North":  { male:47.41, female:52.59, Nair:14.07, Ezhava:33.16, Muslim:25.10, Christian:0.00,  "SC/ST":0.00,  Others:11.55 },
   Kasaragod:          { male:50.00, female:50.00, Nair:3.30,  Ezhava:15.00, Muslim:50.42, Christian:5.43,  "SC/ST":5.43,  Others:15.20 },
-  Manjeshwaram:       { male:50.38, female:49.62, Nair:0.44,  Ezhava:12.00, Muslim:52.89, Christian:4.77,  "SC/ST":4.77,  Others:20.01 },
+  Manjeshwaram:       { male:50.38, female:49.62, Nair:0.004, Ezhava:12.00, Muslim:52.89, Christian:4.77,  "SC/ST":4.77,  Others:20.01 },
 };
 
 var AGE_WEIGHTS = {
