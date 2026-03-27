@@ -2,6 +2,7 @@
 export const AC_NUMBER_BY_NAME = {
   Kattakkada: "138",
   Kovalam: "139",
+  Kazhakkoottam: "132",
   Vattiyoorkavu: "133",
   Thiruvananthapuram: "134",
   Nemom: "135",

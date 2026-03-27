@@ -6,9 +6,14 @@ export const constituencyData = [
     fa2: "Ajin Anand",
   },
   {
+    ac: "Kazhakkoottam",
+    fa1: "ASWIN DAS T.S.",
+    fa2: "Anandu Ashok A",
+  },
+  {
     ac: "Kovalam",
-    fa1: "Anandhu RS",
-    fa2: "Arun R",
+    fa1: "",
+    fa2: "",
   },
   {
     ac: "Vattiyoorkavu",

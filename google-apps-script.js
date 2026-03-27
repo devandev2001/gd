@@ -41,6 +41,7 @@
 var AC_DEMOGRAPHICS = {
   Kattakkada:         { male:48.01, female:51.99, Nair:34.99, Ezhava:14.83, Muslim:6.04,  Christian:22.27, "SC/ST":11.37, Others:10.5  },
   Kovalam:            { male:48.88, female:51.11, Nair:14.71, Ezhava:14.35, Muslim:9.56,  Christian:35.91, "SC/ST":11.66, Others:13.81 },
+  Kazhakkoottam:      { male:47.82, female:52.18, Nair:27.98, Ezhava:28.30, Muslim:7.30,  Christian:14.50, "SC/ST":10.20, Others:11.72 },
   Vattiyoorkavu:      { male:47.56, female:52.44, Nair:35.23, Ezhava:10.24, Muslim:6.00,  Christian:18.00, "SC/ST":10.20, Others:20.33 },
   Thiruvananthapuram: { male:48.06, female:51.93, Nair:23.21, Ezhava:8.43,  Muslim:18.00, Christian:24.00, "SC/ST":9.09,  Others:17.27 },
   Nemom:              { male:48.30, female:51.69, Nair:30.88, Ezhava:13.25, Muslim:15.30, Christian:8.50,  "SC/ST":9.41,  Others:22.66 },

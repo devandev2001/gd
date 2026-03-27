@@ -20,6 +20,10 @@ export const acDemographics = {
     male: 48.88, female: 51.11,
     Nair: 14.71, Ezhava: 14.35, Muslim: 9.56, Christian: 35.91, "SC/ST": 11.66, Others: 13.81,
   },
+  Kazhakkoottam: {
+    male: 47.82, female: 52.18,
+    Nair: 27.98, Ezhava: 28.30, Muslim: 7.30, Christian: 14.50, "SC/ST": 10.20, Others: 11.72,
+  },
   Vattiyoorkavu: {
     male: 47.56, female: 52.44,
     Nair: 35.23, Ezhava: 10.24, Muslim: 6.0, Christian: 18.0, "SC/ST": 10.2, Others: 20.33,
