@@ -131,7 +131,7 @@ export const ageGroups = [
 
 export const voteOptions = ["LDF", "UDF", "BJP/NDA", "Others", "Not Voted"];
 
-export const winOptions = ["LDF", "UDF", "BJP/NDA", "Others"];
+export const winOptions = ["LDF", "UDF", "BJP/NDA"];
 
 // Google Apps Script Web App URL
 export const GOOGLE_SCRIPT_URL =
