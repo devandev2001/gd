@@ -14,6 +14,7 @@
  * IMPORTANT: Dashboard/report weighting uses Final Values (P), not N.
  *
  * GevsVE (O) = same as your sheet: GEVSVE_BASE[party][B] / COUNTIFS($K:$K,party,$B:$B,B) for UDF/LDF/BJP/NDA; else 1.
+ * Kasaragod spelling variants (e.g. Kasargod) normalize to “Kasaragod” so denominators are not split.
  * doPost does not run that full recalc inline — it schedules it (~2s) so the form returns fast on large Sheet1.
  * Sheet filters hide rows but do not remove data; clear filters on K if rows seem “missing”.
  *
@@ -146,13 +147,14 @@ function isValidAgeLabel(val) {
 }
 
 function normalizeAcName(acRaw) {
-  var s = String(acRaw || "").trim().replace(/[\u200B-\u200D\uFEFF]/g, "");
-  var k = s.toLowerCase().replace(/\s+/g, " ");
+  var s = String(acRaw || "").replace(/[\u200B-\u200D\uFEFF\u00A0]/g, " ").trim().replace(/\s+/g, " ");
+  var k = s.toLowerCase();
   if (k === "kattakada") return "Kattakkada";
   if (k === "kowalam") return "Kovalam";
   if (k === "trivandrum") return "Thiruvananthapuram";
   if (k === "naimam" || k === "nemam" || k === "nemeom" || k === "naiyamam") return "Nemom";
-  if (k === "kasargod") return "Kasaragod";
+  // GEVSVE_BASE / demographics / Excel use spelling "Kasaragod" — merge common variants so COUNTIFS denominator is not split
+  if (k === "kasargod" || k === "kasaragodu" || k === "kasargodu" || k === "kasrgod" || k === "kassaragod") return "Kasaragod";
   if (k === "manjeswaram" || k === "manjeshwar") return "Manjeshwaram";
 
   var dem = getDemographicsMap();
@@ -417,10 +419,14 @@ function getAgeLabelFromWeight(ageWeight) {
   return getAgeLabelFromAny(ageWeight);
 }
 
-/** Missing (party, AC) → 1, same as Excel inner fallback; calcGevsveForRow treats base===1 as “no table match”. */
+/**
+ * Numerator from GEVSVE_BASE, or null if (party, AC) is not in the Excel formula table.
+ * Do not use numeric 1 as “missing” — a real numerator could be 1 and would break === 1 checks.
+ */
 function getBaseGevsveValue(party, ac) {
-  if (GEVSVE_BASE[party] && GEVSVE_BASE[party].hasOwnProperty(ac)) return GEVSVE_BASE[party][ac];
-  return 1;
+  var t = GEVSVE_BASE[party];
+  if (!t || !t.hasOwnProperty(ac)) return null;
+  return t[ac];
 }
 
 /** COUNTIFS($K:$K, party, $B:$B, AC) — column K index 10, B index 1 */
@@ -443,7 +449,7 @@ function calcGevsveForRow(ac, vote2024Party, countMap) {
   if (party !== "UDF" && party !== "LDF" && party !== "BJP/NDA") return 1;
 
   var base = getBaseGevsveValue(party, acNorm);
-  if (base === 1) return 1;
+  if (base == null) return 1;
 
   var denom = countMap[party + "||" + acNorm] || 0;
   if (denom <= 0) return 1;
@@ -487,7 +493,7 @@ function incrementalUpdateGevsveAfterAppend(sheet, lastRow) {
   var targetKey = partyNew + "||" + acNew;
   var base = getBaseGevsveValue(partyNew, acNew);
   var denom = countMap[targetKey] || 0;
-  var oVal = (base === 1 || denom <= 0) ? 1 : base / denom;
+  var oVal = (base == null || denom <= 0) ? 1 : base / denom;
 
   var matchIdx = [];
   for (i = 0; i < numRows; i++) {
