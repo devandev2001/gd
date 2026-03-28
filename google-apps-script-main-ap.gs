@@ -14,9 +14,10 @@
  * Form values: whatever the user selects (caste / gender / age) is written to E, G, I when valid;
  * weights in D, F, H always come from demographics + that selection.
  *
- * doPost returns right after appending the row; O/P (GevsVE × N) are filled ~1–2s later via a one-shot
- * trigger (full recalc). This keeps the form spinner short even with huge sheets. Dashboard may see stale P
- * for a few seconds. After bulk edits, use ?action=recalcOP or fixTextRows.
+ * doPost returns immediately after the new row is written; O/P are recalculated ~2s later via trigger so the
+ * form does not wait on full-sheet or column-scans (avoids 30–40s spinners on large Sheet1). Column P may lag
+ * a few seconds vs N. After bulk edits, open ?action=recalcOP. Optional: time-driven trigger on pingWarm() every
+ * 5–10 min reduces Apps Script cold starts.
  */
 
 var MAIN_SHEET_NAME = "Sheet1";
@@ -544,6 +545,18 @@ function runDeferredGevsveRecalc() {
   }
 }
 
+/**
+ * Optional: Triggers → Add trigger → pingWarm → Time-driven → Every 5–10 minutes.
+ * Keeps the script/sheet binding warm so the first form submit after idle is not 15–30s cold start only.
+ */
+function pingWarm() {
+  try {
+    SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MAIN_SHEET_NAME);
+  } catch (err) {
+    Logger.log("pingWarm: " + err);
+  }
+}
+
 function recalcGevsveAndFinalValues() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(MAIN_SHEET_NAME) || ss.getSheets()[0];
@@ -639,6 +652,10 @@ function doGet(e) {
     if (action === "recalcOP") {
       recalcGevsveAndFinalValues();
       return jsonResponse({ status: "ok", message: "O/P recalculated" });
+    }
+    if (action === "ping") {
+      pingWarm();
+      return jsonResponse({ status: "ok", message: "pong" });
     }
 
     return ContentService.createTextOutput("Kerala Survey 2026 API is running.")
