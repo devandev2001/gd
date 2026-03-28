@@ -11,6 +11,9 @@
  * M Who Will Win          N Who Will Win Normalized (D×F×H)
  * O GevsVE                P Final Values (O×N) — dashboard uses P as normalizedScore
  *
+ * GevsVE matches Excel: numerator(party,B) / COUNTIFS($K:$K,party,$B:$B,B) for UDF/LDF/BJP/NDA and listed ACs; else 1.
+ * Sheet filters do not change stored data — if Kasaragod rows “vanish”, clear the column K filter.
+ *
  * Form values: whatever the user selects (caste / gender / age) is written to E, G, I when valid;
  * weights in D, F, H always come from demographics + that selection.
  *
@@ -82,6 +85,12 @@ var GEVSVE_NUMERATORS = {
   }
 };
 
+/**
+ * incrementalUpdateGevsveAfterAppend reads B+K+N for every row — OK for small sheets; on ~100k+ rows it can take 30s+.
+ * Above this row count, skip incremental and rely on deferred full recalc only (fast doPost; O/P in ~2s).
+ */
+var GEVSVE_INCREMENTAL_MAX_DATA_ROWS = 12000;
+
 var _DEMOGRAPHICS_CACHE = null;
 
 function pad2(n) {
@@ -139,12 +148,14 @@ function isValidAgeLabel(val) {
 }
 
 function normalizeAcName(acRaw) {
-  var s = String(acRaw || "").trim();
+  var s = String(acRaw || "").trim().replace(/[\u200B-\u200D\uFEFF]/g, "");
   var k = s.toLowerCase().replace(/\s+/g, " ");
   if (k === "kattakada") return "Kattakkada";
   if (k === "kowalam") return "Kovalam";
   if (k === "trivandrum") return "Thiruvananthapuram";
   if (k === "naimam" || k === "nemam" || k === "nemeom" || k === "naiyamam") return "Nemom";
+  if (k === "kasargod") return "Kasaragod";
+  if (k === "manjeswaram" || k === "manjeshwar") return "Manjeshwaram";
 
   var dem = getDemographicsMap();
   if (dem[s]) return s;
@@ -163,6 +174,13 @@ function normalizeParty(p) {
   if (s === "UDF") return "UDF";
   if (s === "BJP/NDA" || s === "BJP-NDA" || s === "BJPNDA" || s === "BJP" || s === "NDA") return "BJP/NDA";
   return "Others";
+}
+
+/** Column K: store UDF / LDF / BJP/NDA exactly like Excel COUNTIFS; keep “Not Voted” / “Others” as submitted. */
+function vote2024ForSheet(v) {
+  var p = normalizeParty(v);
+  if (p === "UDF" || p === "LDF" || p === "BJP/NDA") return p;
+  return String(v === null || v === undefined ? "" : v).trim();
 }
 
 function ensureHeaders(sheet) {
@@ -516,29 +534,38 @@ var PROP_GEVSVE_RECALC_PENDING = "GEVSVE_RECALC_PENDING";
 
 /**
  * Schedule full O:P recalc shortly after this request ends — form HTTP response returns fast.
- * If trigger creation fails (quota / permissions), falls back to synchronous incremental update.
+ * Large Sheet1: skip incremental (avoids scanning B+K+N for 100k+ rows). If trigger creation fails on a large sheet,
+ * runs one synchronous full recalc as last resort.
  */
 function scheduleDeferredGevsveRecalc(sheet, lastRow) {
-  var props = PropertiesService.getScriptProperties();
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(3000)) {
-    incrementalUpdateGevsveAfterAppend(sheet, lastRow);
-    return;
+  var numDataRows = lastRow - 1;
+  if (numDataRows >= 1 && numDataRows <= GEVSVE_INCREMENTAL_MAX_DATA_ROWS) {
+    try {
+      incrementalUpdateGevsveAfterAppend(sheet, lastRow);
+    } catch (err) {
+      Logger.log("incrementalUpdateGevsveAfterAppend: " + err);
+    }
   }
-  try {
-    if (props.getProperty(PROP_GEVSVE_RECALC_PENDING) === "1") return;
 
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty(PROP_GEVSVE_RECALC_PENDING) === "1") return;
+
+  try {
+    props.setProperty(PROP_GEVSVE_RECALC_PENDING, "1");
     ScriptApp.newTrigger("runDeferredGevsveRecalc")
       .timeBased()
       .after(2000)
       .create();
-
-    props.setProperty(PROP_GEVSVE_RECALC_PENDING, "1");
   } catch (err) {
-    Logger.log("scheduleDeferredGevsveRecalc failed, using sync incremental: " + err);
-    incrementalUpdateGevsveAfterAppend(sheet, lastRow);
-  } finally {
-    lock.releaseLock();
+    props.deleteProperty(PROP_GEVSVE_RECALC_PENDING);
+    Logger.log("scheduleDeferredGevsveRecalc: " + err);
+    if (numDataRows > GEVSVE_INCREMENTAL_MAX_DATA_ROWS) {
+      try {
+        recalcGevsveAndFinalValues();
+      } catch (e2) {
+        Logger.log("recalcGevsveAndFinalValues fallback: " + e2);
+      }
+    }
   }
 }
 
@@ -620,7 +647,7 @@ function doPost(e) {
       w.genderW, genderLabel,
       w.ageW, ageLabel,
       data.vote2021,
-      data.vote2024,
+      vote2024ForSheet(data.vote2024),
       vote2026,
       whoWillWin,
       w.norm,
