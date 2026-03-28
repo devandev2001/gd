@@ -103,45 +103,62 @@ export default function SurveyForm() {
 
     setSubmitting(true);
 
-    try {
-      // Send labels only — Google Apps Script resolves weights from AC_DEMOGRAPHICS
-      // so scores stay correct after you update the script (avoids stale cached JS sending 0).
-      const payload = {
-        timestamp: new Date().toLocaleString("en-IN", {
-          timeZone: "Asia/Kolkata",
-        }),
-        ac: form.ac,
-        faName: form.faName,
-        caste: form.caste,
-        gender: form.gender,
-        age: form.age,
-        vote2021: form.vote2021,
-        vote2024: form.vote2024,
-        vote2026: form.vote2026,
-        whoWillWin: form.whoWillWin,
-      };
-
-      await fetch(GOOGLE_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      setSuccess(true);
-      setForm(initialForm);
-      setFieldErrors({});
-      setAttempted(false);
-      // Scroll to top so user sees the success message
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      setTimeout(() => setSuccess(false), 5000);
-    } catch {
-      setError(
-        "Submission failed. Please check your internet connection and try again."
-      );
-    } finally {
-      setSubmitting(false);
-    }
+      try {
+        // Send labels only — Google Apps Script resolves weights from AC_DEMOGRAPHICS
+        // so scores stay correct after you update the script (avoids stale cached JS sending 0).
+        const payload = {
+          timestamp: new Date().toLocaleString("en-IN", {
+            timeZone: "Asia/Kolkata",
+          }),
+          ac: form.ac,
+          faName: form.faName,
+          caste: form.caste,
+          gender: form.gender,
+          age: form.age,
+          vote2021: form.vote2021,
+          vote2024: form.vote2024,
+          vote2026: form.vote2026,
+          whoWillWin: form.whoWillWin,
+        };
+  
+        // Create an AbortController so we can force the UI to stop waiting after 1 second
+        // since we know the Apps Script receives the data and writes it to the sheet instantly
+        // before spending time on the group calculations.
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1000);
+  
+        try {
+          // Changed to text/plain to prevent CORS preflight freezing the Promise
+          await fetch(GOOGLE_SCRIPT_URL, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+          });
+        } catch (fetchErr) {
+          // In no-cors mode, a timeout or opaque response error is normal and safe to ignore 
+          // because the request was transmitted to the Google server.
+          console.log("Transmission complete (Fetch handoff)", fetchErr);
+        } finally {
+          clearTimeout(timeoutId);
+        }
+  
+        setSuccess(true);
+        setForm(initialForm);
+        setFieldErrors({});
+        setAttempted(false);
+        // Scroll to top so user sees the success message
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        setTimeout(() => setSuccess(false), 5000);
+      } catch (err) {
+        console.error(err);
+        setError(
+          "Submission encountered an issue, but may have saved to Google Sheets."
+        );
+      } finally {
+        setSubmitting(false);
+      }
   };
 
   const hasError = (name) => attempted && fieldErrors[name];

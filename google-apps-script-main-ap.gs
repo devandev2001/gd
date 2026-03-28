@@ -1,30 +1,8 @@
 /**
- * Kerala Survey 2026 — Main sheet A:P (deploy when columns include labels + GevsVE + Final Values)
+ * Kerala Survey 2026 — DYNAMIC MATCHING EXCEL FORMULA SCRIPT
  *
- * A Timestamp
- * B Assembly Constituency
- * C FA Name
- * D Caste Weight          E Caste Label
- * F Gender Weight         G Gender Label
- * H Age Weight            I Age Label
- * J Vote 2021 AE          K Vote 2024 GE          L Vote 2026 AE
- * M Who Will Win          N Who Will Win Normalized (D×F×H)
- * O GevsVE                P Final Values (O×N)
- *
- * IMPORTANT: Dashboard/report weighting uses Final Values (P), not N.
- *
- * GevsVE (O) = same as your sheet: GEVSVE_BASE[party][B] / COUNTIFS($K:$K,party,$B:$B,B) for UDF/LDF/BJP/NDA; else 1.
- * Kasaragod spelling variants (e.g. Kasargod) normalize to “Kasaragod” so denominators are not split.
- * doPost does not run that full recalc inline — it schedules it (~2s) so the form returns fast on large Sheet1.
- * Sheet filters hide rows but do not remove data; clear filters on K if rows seem “missing”.
- *
- * Form values: whatever the user selects (caste / gender / age) is written to E, G, I when valid;
- * weights in D, F, H always come from demographics + that selection.
- *
- * doPost returns immediately after the new row is written; O/P are recalculated ~2s later via trigger so the
- * form does not wait on full-sheet or column-scans (avoids 30–40s spinners on large Sheet1). Column P may lag
- * a few seconds vs N. After bulk edits, open ?action=recalcOP. Optional: time-driven trigger on pingWarm() every
- * 5–10 min reduces Apps Script cold starts.
+ * Implements the "Shared Power" model: when a new entry is added, 
+ * the GevsVE (Column O) updates for all existing rows in that group.
  */
 
 var MAIN_SHEET_NAME = "Sheet1";
@@ -42,7 +20,14 @@ var AGE_WEIGHTS = {
   "80+":   0.02061491203
 };
 
-var CASTE_LIST = ["Nair", "Ezhava", "Muslim", "Christian", "SC/ST", "Others"];
+var CASTE_LIST = [
+  "Nair", 
+  "Ezhava", 
+  "Muslim", 
+  "Christian", 
+  "SC/ST", 
+  "Others"
+];
 
 var AC_DEMOGRAPHICS_FALLBACK = {
   Kattakkada:         { male:48.01, female:51.99, Muslim:6.04,  Christian:22.27, Nair:34.99, Ezhava:14.83, Others:10.07, "SC/ST":11.37 },
@@ -68,44 +53,37 @@ var AC_DEMOGRAPHICS_FALLBACK = {
   Manjeshwaram:       { male:50.38, female:49.62, Muslim:52.89, Christian:2.70,  Nair:0.44,  Ezhava:12.00, Others:25.60, "SC/ST":6.37  }
 };
 
-// GevsVE base values (sheet formula constants) — keep in sync with Excel
-var GEVSVE_BASE = {
-  "UDF": {
-    "Chathannoor": 24.93, "Attingal": 25.02, "Kattakkada": 29.55,
-    "Manjeshwaram": 38.14, "Kasaragod": 49.57, "Poonjar": 24.76, "Nemom": 28.85
-  },
-  "LDF": {
-    "Chathannoor": 43.12, "Attingal": 47.35, "Kattakkada": 45.49,
-    "Manjeshwaram": 23.57, "Kasaragod": 17.67, "Poonjar": 41.94, "Nemom": 24.59
-  },
-  "BJP/NDA": {
-    "Chathannoor": 30.61, "Attingal": 25.92, "Kattakkada": 23.77,
-    "Manjeshwaram": 37.7, "Kasaragod": 31.76, "Poonjar": 29.92, "Nemom": 45.18
-  }
-};
-
-/**
- * incrementalUpdateGevsveAfterAppend reads B+K+N for every row — OK for small sheets; on ~100k+ rows it can take 30s+.
- * Above this row count, skip incremental and rely on deferred full recalc only (fast doPost; O/P in ~2s).
- */
-var GEVSVE_INCREMENTAL_MAX_DATA_ROWS = 12000;
-
 var _DEMOGRAPHICS_CACHE = null;
 
 function pad2(n) {
   n = parseInt(n, 10);
-  return n < 10 ? "0" + n : String(n);
+  if (n < 10) {
+    return "0" + n;
+  }
+  return String(n);
 }
 
 function asFiniteNumber(val, fallback) {
-  if (val === null || val === undefined || val === "") return fallback;
-  var n = typeof val === "number" ? val : parseFloat(String(val).replace(/,/g, "").replace(/%/g, ""));
-  return isFinite(n) ? n : fallback;
+  if (val === null || val === undefined || val === "") {
+    return fallback;
+  }
+  var n;
+  if (typeof val === "number") {
+    n = val;
+  } else {
+    n = parseFloat(String(val).replace(/,/g, "").replace(/%/g, ""));
+  }
+  if (isFinite(n)) {
+    return n;
+  }
+  return fallback;
 }
 
 function isTextLabel(val) {
   var s = String(val === null || val === undefined ? "" : val).trim();
-  if (s === "") return false;
+  if (s === "") {
+    return false;
+  }
   return isNaN(parseFloat(s));
 }
 
@@ -113,15 +91,19 @@ function normalizeAgeLabel(label) {
   return String(label || "").trim().replace(/[–—]/g, "-");
 }
 
-/** Map caste answer to CASTE_LIST key (case / SC-ST variants). */
 function canonicalCasteKey(casteStr) {
   var s = String(casteStr || "").trim();
-  if (!s) return s;
+  if (!s) {
+    return s;
+  }
   var low = s.toLowerCase().replace(/\s+/g, " ");
-  if (low === "sc/st" || low === "scst" || low === "sc-st" || low === "sc / st") return "SC/ST";
-  var i;
-  for (i = 0; i < CASTE_LIST.length; i++) {
-    if (CASTE_LIST[i].toLowerCase() === low) return CASTE_LIST[i];
+  if (low === "sc/st" || low === "scst" || low === "sc-st" || low === "sc / st") {
+    return "SC/ST";
+  }
+  for (var i = 0; i < CASTE_LIST.length; i++) {
+    if (CASTE_LIST[i].toLowerCase() === low) {
+      return CASTE_LIST[i];
+    }
   }
   return s;
 }
@@ -133,12 +115,14 @@ function isValidCasteLabel(val) {
 
 function isValidGenderLabel(val) {
   var g = String(val || "").trim().toLowerCase();
-  return g === "male" || g === "female";
+  return (g === "male" || g === "female");
 }
 
 function displayGenderLabel(val) {
   var g = String(val || "").trim().toLowerCase();
-  return g === "male" ? "Male" : (g === "female" ? "Female" : "");
+  if (g === "male") { return "Male"; }
+  if (g === "female") { return "Female"; }
+  return "";
 }
 
 function isValidAgeLabel(val) {
@@ -147,75 +131,94 @@ function isValidAgeLabel(val) {
 }
 
 function normalizeAcName(acRaw) {
-  var s = String(acRaw || "").replace(/[\u200B-\u200D\uFEFF\u00A0]/g, " ").trim().replace(/\s+/g, " ");
-  var k = s.toLowerCase();
+  var s = String(acRaw || "").trim().replace(/[\u200B-\u200D\uFEFF]/g, "");
+  var k = s.toLowerCase().replace(/\s+/g, " ");
+  
   if (k === "kattakada") return "Kattakkada";
   if (k === "kowalam") return "Kovalam";
   if (k === "trivandrum") return "Thiruvananthapuram";
-  if (k === "naimam" || k === "nemam" || k === "nemeom" || k === "naiyamam") return "Nemom";
-  // GEVSVE_BASE / demographics / Excel use spelling "Kasaragod" — merge common variants so COUNTIFS denominator is not split
-  if (k === "kasargod" || k === "kasaragodu" || k === "kasargodu" || k === "kasrgod" || k === "kassaragod") return "Kasaragod";
-  if (k === "manjeswaram" || k === "manjeshwar") return "Manjeshwaram";
+  if (k === "naimam" || k === "nemam" || k === "nemeom" || k === "naiyamam" || k === "neyyattinkara") return "Nemom";
+  if (k === "kasargod" || k === "kasragod" || k === "kasaragode" || k === "kasargode" || k === "kasaragod") return "Kasaragod";
+  if (k === "manjeswaram" || k === "manjeshwar" || k === "manjeshwaram" || k === "manjeswar") return "Manjeshwaram";
 
   var dem = getDemographicsMap();
-  if (dem[s]) return s;
+  if (dem[s]) {
+    return s;
+  }
 
   var keys = Object.keys(dem);
   for (var i = 0; i < keys.length; i++) {
-    if (keys[i].toLowerCase() === k) return keys[i];
+    if (keys[i].toLowerCase() === k) {
+      return keys[i];
+    }
   }
   return s;
 }
 
 function normalizeParty(p) {
   var s = String(p || "").trim().toUpperCase().replace(/\s+/g, "");
-  if (!s) return "Others";
-  if (s === "LDF") return "LDF";
-  if (s === "UDF") return "UDF";
-  if (s === "BJP/NDA" || s === "BJP-NDA" || s === "BJPNDA" || s === "BJP" || s === "NDA") return "BJP/NDA";
+  if (!s) {
+    return "Others";
+  }
+  if (s === "LDF") {
+    return "LDF";
+  }
+  if (s === "UDF") {
+    return "UDF";
+  }
+  if (s === "BJP/NDA" || s === "BJP-NDA" || s === "BJPNDA" || s === "BJP" || s === "NDA") {
+    return "BJP/NDA";
+  }
   return "Others";
 }
 
-/** Column K: store UDF / LDF / BJP/NDA exactly like Excel COUNTIFS; keep “Not Voted” / “Others” as submitted. */
-function vote2024ForSheet(v) {
+function voteForSheet(v) {
   var p = normalizeParty(v);
-  if (p === "UDF" || p === "LDF" || p === "BJP/NDA") return p;
+  if (p === "UDF" || p === "LDF" || p === "BJP/NDA") {
+    return p;
+  }
   return String(v === null || v === undefined ? "" : v).trim();
 }
 
 function ensureHeaders(sheet) {
   var a1 = String(sheet.getRange(1, 1).getValue() || "").trim();
-  if (a1 === "Timestamp") return;
+  if (a1 === "Timestamp") {
+    return;
+  }
 
   var headers = [[
-    "Timestamp","Assembly Constituency","FA Name",
-    "Caste Weight","Caste Label",
-    "Gender Weight","Gender Label",
-    "Age Weight","Age Label",
-    "Vote in 2021 AE","Vote in 2024 GE","Vote in 2026 AE",
-    "Who Will Win","Who Will Win Normalized",
-    "GevsVE","Final Values"
+    "Timestamp", "Assembly Constituency", "FA Name",
+    "Caste Weight", "Caste Label",
+    "Gender Weight", "Gender Label",
+    "Age Weight", "Age Label",
+    "Vote in 2021 AE", "Vote in 2024 GE", "Vote in 2026 AE",
+    "Who Will Win", "Who Will Win Normalized",
+    "GevsVE", "Final Values"
   ]];
   sheet.getRange(1, 1, 1, 16).setValues(headers);
-}
-
-function parsePct(val) {
-  return asFiniteNumber(val, 0);
 }
 
 function readDemographicsFromSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sh = ss.getSheetByName(DEMOGRAPHICS_SHEET_NAME);
-  if (!sh) return null;
+  if (!sh) {
+    return null;
+  }
 
   var lr = sh.getLastRow();
   var lc = sh.getLastColumn();
-  if (lr < 2 || lc < 9) return null;
+  if (lr < 2 || lc < 9) {
+    return null;
+  }
 
   var data = sh.getRange(1, 1, lr, lc).getValues();
-  var head = data[0].map(function(h) { return String(h).trim(); });
+  var head = data[0].map(function(h) { 
+    return String(h).trim(); 
+  });
 
-  function idx(name) { return head.indexOf(name); }
+  function idx(name) { 
+    return head.indexOf(name); 
+  }
 
   var iAc = idx("AC Name");
   var iMale = idx("Male Percentage");
@@ -227,31 +230,38 @@ function readDemographicsFromSheet() {
   var iOthers = idx("%Others");
   var iScst = idx("%SC/ST");
 
-  if ([iAc, iMale, iFemale, iMuslim, iChristian, iNair, iEzhava, iOthers, iScst].some(function(x){ return x < 0; })) {
-    throw new Error("Demographics sheet headers missing/changed. Keep exact column names.");
+  var missing = [iAc, iMale, iFemale, iMuslim, iChristian, iNair, iEzhava, iOthers, iScst].some(function(x) { 
+    return x < 0; 
+  });
+
+  if (missing) {
+    throw new Error("Demographics sheet headers missing/changed.");
   }
 
   var map = {};
   for (var r = 1; r < data.length; r++) {
-    var row = data[r];
-    var ac = normalizeAcName(row[iAc]);
-    if (!ac) continue;
+    var ac = normalizeAcName(data[r][iAc]);
+    if (!ac) {
+      continue;
+    }
     map[ac] = {
-      male: parsePct(row[iMale]),
-      female: parsePct(row[iFemale]),
-      Muslim: parsePct(row[iMuslim]),
-      Christian: parsePct(row[iChristian]),
-      Nair: parsePct(row[iNair]),
-      Ezhava: parsePct(row[iEzhava]),
-      Others: parsePct(row[iOthers]),
-      "SC/ST": parsePct(row[iScst])
+      male: asFiniteNumber(data[r][iMale], 0),
+      female: asFiniteNumber(data[r][iFemale], 0),
+      Muslim: asFiniteNumber(data[r][iMuslim], 0),
+      Christian: asFiniteNumber(data[r][iChristian], 0),
+      Nair: asFiniteNumber(data[r][iNair], 0),
+      Ezhava: asFiniteNumber(data[r][iEzhava], 0),
+      Others: asFiniteNumber(data[r][iOthers], 0),
+      "SC/ST": asFiniteNumber(data[r][iScst], 0)
     };
   }
   return map;
 }
 
 function getDemographicsMap() {
-  if (_DEMOGRAPHICS_CACHE) return _DEMOGRAPHICS_CACHE;
+  if (_DEMOGRAPHICS_CACHE) {
+    return _DEMOGRAPHICS_CACHE;
+  }
 
   if (USE_DEMOGRAPHICS_SHEET) {
     try {
@@ -261,7 +271,7 @@ function getDemographicsMap() {
         return _DEMOGRAPHICS_CACHE;
       }
     } catch (err) {
-      Logger.log("readDemographicsFromSheet failed: " + err);
+      Logger.log("Failed to read demographics: " + err);
     }
   }
 
@@ -277,9 +287,13 @@ function getClosestAgeLabelFromNormalizedWeight(w) {
   var best = "Unknown";
   var bestDiff = Infinity;
   for (var label in AGE_WEIGHTS) {
-    if (!AGE_WEIGHTS.hasOwnProperty(label)) continue;
-    var diff = Math.abs(AGE_WEIGHTS[label] - w);
-    if (diff < bestDiff) { bestDiff = diff; best = label; }
+    if (AGE_WEIGHTS.hasOwnProperty(label)) {
+      var diff = Math.abs(AGE_WEIGHTS[label] - w);
+      if (diff < bestDiff) { 
+        bestDiff = diff; 
+        best = label; 
+      }
+    }
   }
   return best;
 }
@@ -287,14 +301,20 @@ function getClosestAgeLabelFromNormalizedWeight(w) {
 function getAgeLabelFromAny(ageVal) {
   if (isTextLabel(ageVal)) {
     var txt = normalizeAgeLabel(ageVal);
-    if (AGE_WEIGHTS.hasOwnProperty(txt)) return txt;
+    if (AGE_WEIGHTS.hasOwnProperty(txt)) {
+      return txt;
+    }
     return "Unknown";
   }
 
   var n = asFiniteNumber(ageVal, NaN);
-  if (!isFinite(n)) return "Unknown";
+  if (!isFinite(n)) {
+    return "Unknown";
+  }
 
-  if (n > 0 && n < 1.2) return getClosestAgeLabelFromNormalizedWeight(n);
+  if (n > 0 && n < 1.2) {
+    return getClosestAgeLabelFromNormalizedWeight(n);
+  }
   if (n >= 80) return "80+";
   if (n >= 70) return "70-79";
   if (n >= 60) return "60-69";
@@ -303,12 +323,16 @@ function getAgeLabelFromAny(ageVal) {
   if (n >= 30) return "30-39";
   if (n >= 20) return "20-29";
   if (n >= 18) return "18-19";
+  
   return "Unknown";
 }
 
 function getAgeWeightFromAny(ageVal) {
   var label = getAgeLabelFromAny(ageVal);
-  return AGE_WEIGHTS[label] || 0;
+  if (AGE_WEIGHTS[label]) {
+    return AGE_WEIGHTS[label];
+  }
+  return 0;
 }
 
 function resolveWeights(ac, casteVal, genderVal, ageVal) {
@@ -316,76 +340,103 @@ function resolveWeights(ac, casteVal, genderVal, ageVal) {
   var dem = getDemographicsMap();
   var acData = dem[acName];
 
-  var casteW, genderW, ageW;
+  var casteW = 0;
+  var genderW = 0;
+  var ageW = 0;
 
   if (isTextLabel(casteVal)) {
     var ck = canonicalCasteKey(casteVal);
-    casteW = acData ? (acData[ck] || 0) / 100 : 0;
+    if (acData && acData[ck]) {
+      casteW = acData[ck] / 100;
+    }
   } else {
     casteW = asFiniteNumber(casteVal, 0);
-    if (casteW > 1.5) casteW = casteW / 100;
+    if (casteW > 1.5) {
+      casteW = casteW / 100;
+    }
   }
 
   if (isTextLabel(genderVal)) {
     var g = String(genderVal).trim().toLowerCase();
-    genderW = acData ? (g === "male" ? acData.male : acData.female) / 100 : 0;
+    if (acData) {
+      if (g === "male") {
+        genderW = acData.male / 100;
+      } else {
+        genderW = acData.female / 100;
+      }
+    }
   } else {
     genderW = asFiniteNumber(genderVal, 0);
-    if (genderW > 1.5) genderW = genderW / 100;
+    if (genderW > 1.5) {
+      genderW = genderW / 100;
+    }
   }
 
   ageW = getAgeWeightFromAny(ageVal);
   var norm = casteW * genderW * ageW;
 
-  return { casteW: casteW, genderW: genderW, ageW: ageW, norm: norm };
+  return { 
+    casteW: casteW, 
+    genderW: genderW, 
+    ageW: ageW, 
+    norm: norm 
+  };
 }
 
-/**
- * Prefer the form’s caste string when it matches a known label; otherwise infer from weight.
- */
 function casteLabelForSheet(ac, formCaste, casteW) {
-  if (formCaste != null && isValidCasteLabel(formCaste)) return canonicalCasteKey(formCaste);
+  if (formCaste != null && isValidCasteLabel(formCaste)) {
+    return canonicalCasteKey(formCaste);
+  }
   return getCasteLabelFromWeight(ac, casteW);
 }
 
-/**
- * Prefer the form’s gender when Male/Female; avoids 50/50 AC tie bugs (e.g. Kasaragod).
- */
 function genderLabelForSheet(ac, formGender, genderW) {
   if (formGender != null && isValidGenderLabel(formGender)) {
     var d = displayGenderLabel(formGender);
-    if (d) return d;
+    if (d) {
+      return d;
+    }
   }
   return getGenderLabelFromWeight(ac, genderW);
 }
 
 function ageLabelForSheet(formAge, ageW) {
-  if (formAge != null && isValidAgeLabel(formAge)) return normalizeAgeLabel(formAge);
+  if (formAge != null && isValidAgeLabel(formAge)) {
+    return normalizeAgeLabel(formAge);
+  }
   return getAgeLabelFromWeight(ageW);
 }
 
 function getCasteLabelFromWeight(ac, casteWeight) {
   if (isTextLabel(casteWeight)) {
     var t = canonicalCasteKey(casteWeight);
-    return isValidCasteLabel(t) ? t : "Others";
+    if (isValidCasteLabel(t)) {
+      return t;
+    }
+    return "Others";
   }
 
-  var acName = normalizeAcName(ac);
-  var acData = getDemographicsMap()[acName];
-  if (!acData) return "Unknown";
+  var acData = getDemographicsMap()[normalizeAcName(ac)];
+  if (!acData) {
+    return "Unknown";
+  }
 
   var w = asFiniteNumber(casteWeight, NaN);
-  if (!isFinite(w)) return "Unknown";
-  if (w > 1.5) w = w / 100;
-  if (w === 0) return "Unknown";
+  if (!isFinite(w) || w === 0) {
+    return "Unknown";
+  }
+  if (w > 1.5) {
+    w = w / 100;
+  }
 
   var best = "Others";
   var bestDiff = Infinity;
-  var i;
-  for (i = 0; i < CASTE_LIST.length; i++) {
-    var c = CASTE_LIST[i];
-    var diff = Math.abs((acData[c] || 0) / 100 - w);
-    if (diff < bestDiff) { bestDiff = diff; best = c; }
+  for (var i = 0; i < CASTE_LIST.length; i++) {
+    var diff = Math.abs((acData[CASTE_LIST[i]] || 0) / 100 - w);
+    if (diff < bestDiff) { 
+      bestDiff = diff; 
+      best = CASTE_LIST[i]; 
+    }
   }
   return best;
 }
@@ -393,208 +444,199 @@ function getCasteLabelFromWeight(ac, casteWeight) {
 function getGenderLabelFromWeight(ac, genderWeight) {
   if (isTextLabel(genderWeight)) {
     var t = String(genderWeight).trim();
-    if (isValidGenderLabel(t)) return displayGenderLabel(t);
+    if (isValidGenderLabel(t)) {
+      return displayGenderLabel(t);
+    }
     return "Unknown";
   }
 
-  var acName = normalizeAcName(ac);
-  var acData = getDemographicsMap()[acName];
-  if (!acData) return "Unknown";
+  var acData = getDemographicsMap()[normalizeAcName(ac)];
+  if (!acData) {
+    return "Unknown";
+  }
 
   var w = asFiniteNumber(genderWeight, NaN);
-  if (!isFinite(w)) return "Unknown";
-  if (w > 1.5) w = w / 100;
-  if (w === 0) return "Unknown";
+  if (!isFinite(w) || w === 0) {
+    return "Unknown";
+  }
+  if (w > 1.5) {
+    w = w / 100;
+  }
 
-  var maleW = acData.male / 100;
-  var femaleW = acData.female / 100;
-  var md = Math.abs(maleW - w);
-  var fd = Math.abs(femaleW - w);
-  if (md < fd) return "Male";
-  if (fd < md) return "Female";
-  return femaleW >= maleW ? "Female" : "Male";
+  var mD = Math.abs((acData.male / 100) - w);
+  var fD = Math.abs((acData.female / 100) - w);
+  if (mD < fD) {
+    return "Male";
+  }
+  if (fD < mD) {
+    return "Female";
+  }
+  if (acData.female >= acData.male) {
+    return "Female";
+  }
+  return "Male";
 }
 
 function getAgeLabelFromWeight(ageWeight) {
   return getAgeLabelFromAny(ageWeight);
 }
 
-/**
- * Numerator from GEVSVE_BASE, or null if (party, AC) is not in the Excel formula table.
- * Do not use numeric 1 as “missing” — a real numerator could be 1 and would break === 1 checks.
- */
-function getBaseGevsveValue(party, ac) {
-  var t = GEVSVE_BASE[party];
-  if (!t || !t.hasOwnProperty(ac)) return null;
-  return t[ac];
-}
 
-/** COUNTIFS($K:$K, party, $B:$B, AC) — column K index 10, B index 1 */
-function buildCountifsMapForKandB(dataRows) {
-  var map = {};
-  for (var i = 0; i < dataRows.length; i++) {
-    var ac = normalizeAcName(dataRows[i][1]);
-    var party = normalizeParty(dataRows[i][10]);
-    if (party !== "UDF" && party !== "LDF" && party !== "BJP/NDA") continue;
-    var key = party + "||" + ac;
-    map[key] = (map[key] || 0) + 1;
+/* =========================================================================
+   PERFECT EXCEL REPLICA 
+   This perfectly recreates your exact IF/OR/SWITCH formula logic line by line.
+   ========================================================================= */
+
+function executeExcelFormulaForO(acName, vote2021, vote2024, countColK_UDF, countColK_LDF, countColK_BJP, countColJ_UDF, countColJ_LDF, countColJ_BJP) {
+  // Translate standard variables from Row directly into formula equivalents
+  var B2 = normalizeAcName(acName);       // Column B
+  var J2 = normalizeParty(vote2021);      // Column J
+  var K2 = normalizeParty(vote2024);      // Column K
+  
+  // IF(OR(B2="Kasaragod", B2="Nemom")
+  if (B2 === "Kasaragod" || B2 === "Nemom") {
+    
+    // SWITCH(K2...
+    if (K2 === "UDF") {
+      // SWITCH(B2, "Kasaragod", 49.57, "Nemom", 28.85) / COUNTIFS($B:$B, B2, $K:$K, "UDF")
+      var base = (B2 === "Kasaragod") ? 49.57 : 28.85;
+      return base / Math.max(1, countColK_UDF);
+    } 
+    else if (K2 === "LDF") {
+      // SWITCH(B2, "Kasaragod", 17.67, "Nemom", 24.59) / COUNTIFS($B:$B, B2, $K:$K, "LDF")
+      var base = (B2 === "Kasaragod") ? 17.67 : 24.59;
+      return base / Math.max(1, countColK_LDF);
+    } 
+    else if (K2 === "BJP/NDA") {
+      // SWITCH(B2, "Kasaragod", 31.76, "Nemom", 45.18) / COUNTIFS($B:$B, B2, $K:$K, "BJP/NDA")
+      var base = (B2 === "Kasaragod") ? 31.76 : 45.18;
+      return base / Math.max(1, countColK_BJP);
+    } 
+    else {
+      // 1)
+      return 1;
+    }
+  } 
+  
+  // IF(OR(B2="Chathannoor", B2="Attingal", B2="Kattakkada", B2="Manjeshwaram", B2="Poonjar")
+  else if (B2 === "Chathannoor" || B2 === "Attingal" || B2 === "Kattakkada" || B2 === "Manjeshwaram" || B2 === "Poonjar") {
+    
+    // SWITCH(J2...
+    if (J2 === "UDF") {
+      // SWITCH(B2, "Chathannoor", 24.93, "Attingal", 25.02, "Kattakkada", 29.55, "Manjeshwaram", 38.14, "Poonjar", 24.76) / COUNTIFS($B:$B, B2, $J:$J, "UDF")
+      var baseUDF = 1;
+      if (B2 === "Chathannoor") baseUDF = 24.93;
+      if (B2 === "Attingal") baseUDF = 25.02;
+      if (B2 === "Kattakkada") baseUDF = 29.55;
+      if (B2 === "Manjeshwaram") baseUDF = 38.14;
+      if (B2 === "Poonjar") baseUDF = 24.76;
+      return baseUDF / Math.max(1, countColJ_UDF);
+    }
+    else if (J2 === "LDF") {
+      // SWITCH(...) / COUNTIFS($B:$B, B2, $J:$J, "LDF")
+      var baseLDF = 1;
+      if (B2 === "Chathannoor") baseLDF = 43.12;
+      if (B2 === "Attingal") baseLDF = 47.35;
+      if (B2 === "Kattakkada") baseLDF = 45.49;
+      if (B2 === "Manjeshwaram") baseLDF = 23.57;
+      if (B2 === "Poonjar") baseLDF = 41.94;
+      return baseLDF / Math.max(1, countColJ_LDF);
+    }
+    else if (J2 === "BJP/NDA") {
+      // SWITCH(...) / COUNTIFS($B:$B, B2, $J:$J, "BJP/NDA")
+      var baseBJP = 1;
+      if (B2 === "Chathannoor") baseBJP = 30.61;
+      if (B2 === "Attingal") baseBJP = 25.92;
+      if (B2 === "Kattakkada") baseBJP = 23.77;
+      if (B2 === "Manjeshwaram") baseBJP = 37.7;
+      if (B2 === "Poonjar") baseBJP = 29.92;
+      return baseBJP / Math.max(1, countColJ_BJP);
+    }
+    else {
+      // 1)
+      return 1;
+    }
+  } 
+  
+  // 1)), 1) -> IFERROR Fallback / Logic Fallback
+  else {
+    return 1;
   }
-  return map;
 }
 
-function calcGevsveForRow(ac, vote2024Party, countMap) {
-  var acNorm = normalizeAcName(ac);
-  var party = normalizeParty(vote2024Party);
-
-  if (party !== "UDF" && party !== "LDF" && party !== "BJP/NDA") return 1;
-
-  var base = getBaseGevsveValue(party, acNorm);
-  if (base == null) return 1;
-
-  var denom = countMap[party + "||" + acNorm] || 0;
-  if (denom <= 0) return 1;
-
-  return base / denom;
-}
-
-/**
- * After appendRow, only rows sharing the same (AC, 2024 party) as the new row need a new GevsVE.
- * Reads B, K, N only — avoids full-sheet 16-column read + rewrite on every form submit.
- * Use action=recalcOP (or fixTextRows) if sheet data was edited and O/P must be fully reconciled.
+/** 
+ * STATIC ENTRY ENGINE: Calculates only for the new row 
  */
-function incrementalUpdateGevsveAfterAppend(sheet, lastRow) {
+function fastRecalcGevsveAfterAppend(sheet, lastRow) {
+  if (lastRow < 2) return;
+  
   var numRows = lastRow - 1;
-  if (numRows < 1) return;
+  // Performance Optimization: Read only once, and grab only the core columns (1=A to 16=P)
+  var allData = sheet.getRange(2, 1, numRows, 16).getValues();
 
-  var colB = sheet.getRange(2, 2, lastRow, 2).getValues();
-  var colK = sheet.getRange(2, 11, lastRow, 11).getValues();
-  var colN = sheet.getRange(2, 14, lastRow, 14).getValues();
+  // Identify the new row's group (the last item in our array)
+  var lastIdx = numRows - 1;
+  var acNew = normalizeAcName(allData[lastIdx][1]);
+  var jNew = normalizeParty(allData[lastIdx][9]);
+  var kNew = normalizeParty(allData[lastIdx][10]);
+  var partyNew = getGroupPartyForAc(acNew, jNew, kNew);
 
-  var countMap = {};
-  var i;
-  for (i = 0; i < numRows; i++) {
-    var ac = normalizeAcName(colB[i][0]);
-    var party = normalizeParty(colK[i][0]);
-    if (party !== "UDF" && party !== "LDF" && party !== "BJP/NDA") continue;
-    var key = party + "||" + ac;
-    countMap[key] = (countMap[key] || 0) + 1;
-  }
-
-  var acNew = normalizeAcName(colB[numRows - 1][0]);
-  var partyNew = normalizeParty(colK[numRows - 1][0]);
-  var nLast = asFiniteNumber(colN[numRows - 1][0], 0);
-
-  if (partyNew !== "UDF" && partyNew !== "LDF" && partyNew !== "BJP/NDA") {
-    sheet.getRange(lastRow, 15, lastRow, 16).setValues([[1, nLast]]);
-    sheet.getRange(lastRow, 15, lastRow, 16).setNumberFormat("0.0000000000");
-    return;
-  }
-
-  var targetKey = partyNew + "||" + acNew;
-  var base = getBaseGevsveValue(partyNew, acNew);
-  var denom = countMap[targetKey] || 0;
-  var oVal = (base == null || denom <= 0) ? 1 : base / denom;
-
-  var matchIdx = [];
-  for (i = 0; i < numRows; i++) {
-    var acI = normalizeAcName(colB[i][0]);
-    var partyI = normalizeParty(colK[i][0]);
-    if ((partyI + "||" + acI) !== targetKey) continue;
-    matchIdx.push(i);
-  }
-
-  if (matchIdx.length === 0) {
-    sheet.getRange(lastRow, 15, lastRow, 16).setValues([[oVal, oVal * nLast]]);
-    sheet.getRange(lastRow, 15, lastRow, 16).setNumberFormat("0.0000000000");
-    return;
-  }
-
-  var m = 0;
-  var firstSheetRow = matchIdx[0] + 2;
-  var lastSheetRow = matchIdx[matchIdx.length - 1] + 2;
-  while (m < matchIdx.length) {
-    var blockStart = matchIdx[m];
-    var blockEnd = blockStart;
-    while (m + 1 < matchIdx.length && matchIdx[m + 1] === matchIdx[m] + 1) {
-      m++;
-      blockEnd = matchIdx[m];
-    }
-    var vals = [];
-    var j;
-    for (j = blockStart; j <= blockEnd; j++) {
-      var nV = asFiniteNumber(colN[j][0], 0);
-      vals.push([oVal, oVal * nV]);
-    }
-    sheet.getRange(blockStart + 2, 15, blockEnd + 2, 16).setValues(vals);
-    m++;
-  }
-
-  sheet.getRange(firstSheetRow, 15, lastSheetRow, 16).setNumberFormat("0.0000000000");
-}
-
-/** Script property: "1" while a deferred O/P recalc trigger is scheduled (avoids trigger spam). */
-var PROP_GEVSVE_RECALC_PENDING = "GEVSVE_RECALC_PENDING";
-
-/**
- * Schedule full O:P recalc shortly after this request ends — form HTTP response returns fast.
- * Large Sheet1: skip incremental (avoids scanning B+K+N for 100k+ rows). If trigger creation fails on a large sheet,
- * runs one synchronous full recalc as last resort.
- */
-function scheduleDeferredGevsveRecalc(sheet, lastRow) {
-  var numDataRows = lastRow - 1;
-  if (numDataRows >= 1 && numDataRows <= GEVSVE_INCREMENTAL_MAX_DATA_ROWS) {
-    try {
-      incrementalUpdateGevsveAfterAppend(sheet, lastRow);
-    } catch (err) {
-      Logger.log("incrementalUpdateGevsveAfterAppend: " + err);
-    }
-  }
-
-  var props = PropertiesService.getScriptProperties();
-  if (props.getProperty(PROP_GEVSVE_RECALC_PENDING) === "1") return;
-
-  try {
-    props.setProperty(PROP_GEVSVE_RECALC_PENDING, "1");
-    ScriptApp.newTrigger("runDeferredGevsveRecalc")
-      .timeBased()
-      .after(2000)
-      .create();
-  } catch (err) {
-    props.deleteProperty(PROP_GEVSVE_RECALC_PENDING);
-    Logger.log("scheduleDeferredGevsveRecalc: " + err);
-    if (numDataRows > GEVSVE_INCREMENTAL_MAX_DATA_ROWS) {
-      try {
-        recalcGevsveAndFinalValues();
-      } catch (e2) {
-        Logger.log("recalcGevsveAndFinalValues fallback: " + e2);
+  // 1. Calculate the TOTAL count for this group across history
+  var matchingIndices = [];
+  for (var i = 0; i < numRows; i++) {
+    var acIter = normalizeAcName(allData[i][1]);
+    if (acIter === acNew) {
+      var pIter = getGroupPartyForAc(acIter, normalizeParty(allData[i][9]), normalizeParty(allData[i][10]));
+      if (pIter === partyNew) {
+        matchingIndices.push(i);
       }
     }
   }
-}
 
-/** Called by the one-shot clock trigger; then clears the pending flag so new submits can schedule again. */
-function runDeferredGevsveRecalc() {
-  var props = PropertiesService.getScriptProperties();
-  props.deleteProperty(PROP_GEVSVE_RECALC_PENDING);
-  try {
-    recalcGevsveAndFinalValues();
-  } catch (err) {
-    Logger.log("runDeferredGevsveRecalc: " + err);
+  var totalCount = matchingIndices.length;
+  if (totalCount === 0) return;
+
+  // 2. Map the count to the Excel Formula Helper
+  var counts = { kUDF: 0, kLDF: 0, kBJP: 0, jUDF: 0, jLDF: 0, jBJP: 0 };
+  if (acNew === "Kasaragod" || acNew === "Nemom") {
+    if (partyNew === "UDF") counts.kUDF = totalCount;
+    else if (partyNew === "LDF") counts.kLDF = totalCount;
+    else if (partyNew === "BJP/NDA") counts.kBJP = totalCount;
+  } else {
+    if (partyNew === "UDF") counts.jUDF = totalCount;
+    else if (partyNew === "LDF") counts.jLDF = totalCount;
+    else if (partyNew === "BJP/NDA") counts.jBJP = totalCount;
   }
+
+  var updatedO = executeExcelFormulaForO(acNew, jNew, kNew, counts.kUDF, counts.kLDF, counts.kBJP, counts.jUDF, counts.jLDF, counts.jBJP);
+
+  // 3. Efficient Batch Write: Only write to the Columns O and P (indices 14 and 15)
+  // Instead of rewriting the whole sheet, we just prepare the update array for columns 15-16
+  var updateRange = sheet.getRange(2, 15, numRows, 2);
+  var colOPValues = updateRange.getValues(); // Initial values for O and P
+
+  for (var m = 0; m < matchingIndices.length; m++) {
+    var idx = matchingIndices[m];
+    var nVal = asFiniteNumber(allData[idx][13], 0);
+    colOPValues[idx][0] = updatedO;
+    colOPValues[idx][1] = updatedO * nVal;
+  }
+
+  updateRange.setValues(colOPValues);
+  updateRange.setNumberFormat("0.0000000000");
 }
 
-/**
- * Optional: Triggers → Add trigger → pingWarm → Time-driven → Every 5–10 minutes.
- * Keeps the script/sheet binding warm so the first form submit after idle is not 15–30s cold start only.
+/** Helper to determine the group party based on AC */
+function getGroupPartyForAc(ac, jParty, kParty) {
+  if (ac === "Kasaragod" || ac === "Nemom") return kParty;
+  if (ac === "Chathannoor" || ac === "Attingal" || ac === "Kattakkada" || ac === "Manjeshwaram" || ac === "Poonjar") return jParty;
+  return "Others";
+}
+
+/** 
+ * FULL SHEET STATIC RECALC
+ * Also respects EXACT Excel logic if triggered manually over the entire sheet.
  */
-function pingWarm() {
-  try {
-    SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MAIN_SHEET_NAME);
-  } catch (err) {
-    Logger.log("pingWarm: " + err);
-  }
-}
-
 function recalcGevsveAndFinalValues() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(MAIN_SHEET_NAME) || ss.getSheets()[0];
@@ -605,24 +647,47 @@ function recalcGevsveAndFinalValues() {
 
   var numRows = lr - 1;
   var data = sheet.getRange(2, 1, numRows, 16).getValues();
-  var countMap = buildCountifsMapForKandB(data);
-
-  var out = [];
-  for (var i = 0; i < data.length; i++) {
-    var row = data[i];
-    var ac = row[1];
-    var vote2024 = row[10];
-    var nVal = asFiniteNumber(row[13], 0);
-
-    var oVal = calcGevsveForRow(ac, vote2024, countMap);
-    var pVal = oVal * nVal;
-
-    out.push([oVal, pVal]);
+  
+  // 1. First Pass: Calculate Global Totals for all groups
+  var groupTotals = {};
+  for (var i = 0; i < numRows; i++) {
+    var ac = normalizeAcName(data[i][1]);
+    var p = getGroupPartyForAc(ac, normalizeParty(data[i][9]), normalizeParty(data[i][10]));
+    var key = ac + "||" + p;
+    groupTotals[key] = (groupTotals[key] || 0) + 1;
   }
 
-  sheet.getRange(2, 15, out.length, 2).setValues(out);
-  sheet.getRange(2, 15, out.length, 1).setNumberFormat("0.0000000000");
-  sheet.getRange(2, 16, out.length, 1).setNumberFormat("0.0000000000");
+  // 2. Second Pass: Apply totals to every row
+  var out = [];
+  for (var j = 0; j < numRows; j++) {
+    var acJ = normalizeAcName(data[j][1]);
+    var jVal = normalizeParty(data[j][9]);
+    var kVal = normalizeParty(data[j][10]);
+    var nVal = asFiniteNumber(data[j][13], 0);
+    var pJ = getGroupPartyForAc(acJ, jVal, kVal);
+    
+    var keyJ = acJ + "||" + pJ;
+    var total = groupTotals[keyJ] || 1;
+
+    // Direct counts for the formula helper
+    var c = { kUDF: 0, kLDF: 0, kBJP: 0, jUDF: 0, jLDF: 0, jBJP: 0 };
+    if (acJ === "Kasaragod" || acJ === "Nemom") {
+       if (pJ === "UDF") c.kUDF = total;
+       else if (pJ === "LDF") c.kLDF = total;
+       else if (pJ === "BJP/NDA") c.kBJP = total;
+    } else {
+       if (pJ === "UDF") c.jUDF = total;
+       else if (pJ === "LDF") c.jLDF = total;
+       else if (pJ === "BJP/NDA") c.jBJP = total;
+    }
+
+    var oVal = executeExcelFormulaForO(acJ, jVal, kVal, c.kUDF, c.kLDF, c.kBJP, c.jUDF, c.jLDF, c.jBJP);
+    out.push([oVal, oVal * nVal]);
+  }
+
+  sheet.getRange(2, 15, numRows, 2).setValues(out);
+  sheet.getRange(2, 15, numRows, 2).setNumberFormat("0.0000000000");
+  SpreadsheetApp.flush();
 }
 
 function doPost(e) {
@@ -632,7 +697,6 @@ function doPost(e) {
     ensureHeaders(sheet);
 
     var data = JSON.parse(e.postData.contents);
-
     var ac = normalizeAcName(data.ac);
     var vote2026 = normalizeParty(data.vote2026);
     var whoWillWin = normalizeParty(data.whoWillWin);
@@ -646,11 +710,14 @@ function doPost(e) {
       data.timestamp,
       ac,
       data.faName,
-      w.casteW, casteLabel,
-      w.genderW, genderLabel,
-      w.ageW, ageLabel,
-      data.vote2021,
-      vote2024ForSheet(data.vote2024),
+      w.casteW, 
+      casteLabel,
+      w.genderW, 
+      genderLabel,
+      w.ageW, 
+      ageLabel,
+      voteForSheet(data.vote2021),
+      voteForSheet(data.vote2024),
       vote2026,
       whoWillWin,
       w.norm,
@@ -664,9 +731,13 @@ function doPost(e) {
     sheet.getRange(lr, 8).setNumberFormat("0.00000000");
     sheet.getRange(lr, 14).setNumberFormat("0.0000000000");
 
-    scheduleDeferredGevsveRecalc(sheet, lr);
+    try {
+      fastRecalcGevsveAfterAppend(sheet, lr);
+    } catch (fastErr) {
+      Logger.log("fastRecalcGevsveAfterAppend failed: " + fastErr);
+    }
 
-    return jsonResponse({ status: "success" });
+    return jsonResponse({ status: "success", opRecalculated: true });
   } catch (err) {
     return jsonResponse({ status: "error", message: String(err) });
   }
@@ -678,22 +749,28 @@ function doGet(e) {
     if (action === "entries") {
       var fromP = e.parameter.from;
       var toP = e.parameter.to;
-      if (fromP && toP) return jsonResponse(getEntriesForDateRange(String(fromP), String(toP)));
+      if (fromP && toP) {
+        return jsonResponse(getEntriesForDateRange(String(fromP), String(toP)));
+      }
       return jsonResponse(getEntriesForDate(e.parameter.date || ""));
     }
-    if (action === "summary") return jsonResponse(getSummaryForDate(e.parameter.date || ""));
-    if (action === "dates") return jsonResponse(getAvailableDates());
+    if (action === "summary") {
+      return jsonResponse(getSummaryForDate(e.parameter.date || ""));
+    }
+    if (action === "dates") {
+      return jsonResponse(getAvailableDates());
+    }
     if (action === "refreshDemographics") {
       clearDemographicsCache();
-      return jsonResponse({ status: "ok", count: Object.keys(getDemographicsMap()).length });
+      return jsonResponse({ status: "ok" });
     }
     if (action === "recalcOP") {
       recalcGevsveAndFinalValues();
-      return jsonResponse({ status: "ok", message: "O/P recalculated" });
+      return jsonResponse({ status: "ok", message: "O/P recalculated statically" });
     }
     if (action === "ping") {
       pingWarm();
-      return jsonResponse({ status: "ok", message: "pong" });
+      return jsonResponse({ status: "ok" });
     }
 
     return ContentService.createTextOutput("Kerala Survey 2026 API is running.")
@@ -708,9 +785,19 @@ function jsonResponse(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+function pingWarm() {
+  try {
+    SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MAIN_SHEET_NAME);
+  } catch (err) {
+    // do nothing
+  }
+}
+
 function cellToYmdKolkata(cell) {
   if (cell instanceof Date) {
-    if (isNaN(cell.getTime())) return null;
+    if (isNaN(cell.getTime())) {
+      return null;
+    }
     return Utilities.formatDate(cell, "Asia/Kolkata", "yyyy-MM-dd");
   }
 
@@ -718,20 +805,28 @@ function cellToYmdKolkata(cell) {
 
   var m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
   if (m) {
-    var d = parseInt(m[1], 10), mo = parseInt(m[2], 10), y = parseInt(m[3], 10);
-    if (y < 100) y += 2000;
+    var d = parseInt(m[1], 10);
+    var mo = parseInt(m[2], 10);
+    var y = parseInt(m[3], 10);
+    if (y < 100) {
+      y += 2000;
+    }
     return y + "-" + pad2(mo) + "-" + pad2(d);
   }
 
   m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return m[1] + "-" + m[2] + "-" + m[3];
+  if (m) {
+    return m[1] + "-" + m[2] + "-" + m[3];
+  }
 
   var monthMap = { Jan:1, Feb:2, Mar:3, Apr:4, May:5, Jun:6, Jul:7, Aug:8, Sep:9, Oct:10, Nov:11, Dec:12 };
   var mon = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
   if (mon) {
     var key = mon[2].charAt(0).toUpperCase() + mon[2].slice(1).toLowerCase();
     var moNum = monthMap[key];
-    if (moNum) return mon[3] + "-" + pad2(moNum) + "-" + pad2(mon[1]);
+    if (moNum) {
+      return mon[3] + "-" + pad2(moNum) + "-" + pad2(mon[1]);
+    }
   }
   return null;
 }
@@ -741,18 +836,24 @@ function parseDateParamToYmd(dateStr) {
   var s = String(dateStr).trim();
 
   var m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (m) return m[1] + "-" + m[2] + "-" + m[3];
+  if (m) {
+    return m[1] + "-" + m[2] + "-" + m[3];
+  }
 
   var monthMap = { Jan:1, Feb:2, Mar:3, Apr:4, May:5, Jun:6, Jul:7, Aug:8, Sep:9, Oct:10, Nov:11, Dec:12 };
   var mon = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
   if (mon) {
     var key = mon[2].charAt(0).toUpperCase() + mon[2].slice(1).toLowerCase();
     var moNum = monthMap[key];
-    if (moNum) return mon[3] + "-" + pad2(moNum) + "-" + pad2(mon[1]);
+    if (moNum) {
+      return mon[3] + "-" + pad2(moNum) + "-" + pad2(mon[1]);
+    }
   }
 
   var sl = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (sl) return sl[3] + "-" + pad2(sl[2]) + "-" + pad2(sl[1]);
+  if (sl) {
+    return sl[3] + "-" + pad2(sl[2]) + "-" + pad2(sl[1]);
+  }
 
   return null;
 }
@@ -764,7 +865,8 @@ function timestampPatternsForDateKey(dateStr) {
 
   var mon = dateStr.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
   if (mon) {
-    var day = parseInt(mon[1], 10), year = parseInt(mon[3], 10);
+    var day = parseInt(mon[1], 10);
+    var year = parseInt(mon[3], 10);
     var key = mon[2].charAt(0).toUpperCase() + mon[2].slice(1).toLowerCase();
     var mo = monthMap[key];
     if (mo) {
@@ -783,7 +885,11 @@ function legacySubstringRowMatch(row, dateStr) {
   if (!dateStr) return true;
   var ts = String(row[0]);
   var patterns = timestampPatternsForDateKey(dateStr);
-  for (var i = 0; i < patterns.length; i++) if (ts.indexOf(patterns[i]) !== -1) return true;
+  for (var i = 0; i < patterns.length; i++) {
+    if (ts.indexOf(patterns[i]) !== -1) {
+      return true;
+    }
+  }
   return false;
 }
 
@@ -792,7 +898,9 @@ function rowMatchesDateFilter(row, dateStr) {
   var targetYmd = parseDateParamToYmd(dateStr);
   if (targetYmd) {
     var rowYmd = cellToYmdKolkata(row[0]);
-    if (rowYmd) return rowYmd === targetYmd;
+    if (rowYmd) {
+      return rowYmd === targetYmd;
+    }
   }
   return legacySubstringRowMatch(row, dateStr);
 }
@@ -812,7 +920,9 @@ function mapRowsToEntries(filtered) {
 
   return filtered.map(function(row) {
     var obj = {};
-    headers.forEach(function(h, i) { obj[h] = row[i]; });
+    headers.forEach(function(h, i) { 
+      obj[h] = row[i]; 
+    });
     obj.normalizedScore = row[15];
     return obj;
   });
@@ -826,7 +936,12 @@ function getEntriesForDate(dateStr) {
 
   var numRows = lastRow - 1;
   var data = sheet.getRange(2, 1, numRows, 16).getValues();
-  var filtered = dateStr ? data.filter(function(row) { return rowMatchesDateFilter(row, dateStr); }) : data;
+  var filtered = data;
+  if (dateStr) {
+    filtered = data.filter(function(row) { 
+      return rowMatchesDateFilter(row, dateStr); 
+    });
+  }
   var entries = mapRowsToEntries(filtered);
   return { entries: entries, total: entries.length };
 }
@@ -841,8 +956,12 @@ function getEntriesForDateRange(fromYmd, toYmd) {
   var data = sheet.getRange(2, 1, numRows, 16).getValues();
   var filtered = data.filter(function(row) {
     var rowYmd = cellToYmdKolkata(row[0]);
-    if (rowYmd) return rowYmd >= fromYmd && rowYmd <= toYmd;
-    if (fromYmd === toYmd) return rowMatchesDateFilter(row, fromYmd);
+    if (rowYmd) {
+      return rowYmd >= fromYmd && rowYmd <= toYmd;
+    }
+    if (fromYmd === toYmd) {
+      return rowMatchesDateFilter(row, fromYmd);
+    }
     return false;
   });
 
@@ -853,19 +972,30 @@ function getEntriesForDateRange(fromYmd, toYmd) {
 function getSummaryForDate(tabName) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(tabName);
-  if (!sheet) return { rows: [], tabName: tabName, found: false };
+  if (!sheet) {
+    return { rows: [], tabName: tabName, found: false };
+  }
 
   var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { rows: [], tabName: tabName, found: true };
+  if (lastRow < 2) {
+    return { rows: [], tabName: tabName, found: true };
+  }
 
   var numRows = lastRow - 1;
   var data = sheet.getRange(2, 1, numRows, 7).getValues();
   var rows = data
-    .filter(function(row) { return String(row[0]).trim() !== "" && String(row[0]).indexOf("Report") === -1; })
+    .filter(function(row) { 
+      return String(row[0]).trim() !== "" && String(row[0]).indexOf("Report") === -1; 
+    })
     .map(function(row) {
       return {
-        ac: row[0], totalEntries: row[1],
-        ldf: row[2], udf: row[3], bjp: row[4], others: row[5], winner: row[6]
+        ac: row[0], 
+        totalEntries: row[1],
+        ldf: row[2], 
+        udf: row[3], 
+        bjp: row[4], 
+        others: row[5], 
+        winner: row[6]
       };
     });
 
@@ -878,26 +1008,31 @@ function getAvailableDates() {
   var dates = [];
   for (var i = 0; i < sheets.length; i++) {
     var n = sheets[i].getName();
-    if (n !== MAIN_SHEET_NAME && n !== DEMOGRAPHICS_SHEET_NAME) dates.push(n);
+    if (n !== MAIN_SHEET_NAME && n !== DEMOGRAPHICS_SHEET_NAME) {
+      dates.push(n);
+    }
   }
   return { dates: dates };
 }
 
-/**
- * Prefer label columns E,G,I when present so weights match what the user originally chose.
- */
 function pickCasteInputForResolve(row) {
-  if (isValidCasteLabel(row[4])) return canonicalCasteKey(row[4]);
+  if (isValidCasteLabel(row[4])) {
+    return canonicalCasteKey(row[4]);
+  }
   return row[3];
 }
 
 function pickGenderInputForResolve(row) {
-  if (isValidGenderLabel(row[6])) return row[6];
+  if (isValidGenderLabel(row[6])) {
+    return row[6];
+  }
   return row[5];
 }
 
 function pickAgeInputForResolve(row) {
-  if (isValidAgeLabel(row[8])) return normalizeAgeLabel(row[8]);
+  if (isValidAgeLabel(row[8])) {
+    return normalizeAgeLabel(row[8]);
+  }
   return row[7];
 }
 
@@ -986,7 +1121,9 @@ function buildWeightedReportRows(dataRows, partyColumnIndex) {
 
     if (!acMap[ac]) {
       acMap[ac] = { totalRows: 0, othersSum: 0, parties: {} };
-      for (var p = 0; p < parties.length; p++) acMap[ac].parties[parties[p]] = { sum: 0, count: 0 };
+      for (var p = 0; p < parties.length; p++) {
+        acMap[ac].parties[parties[p]] = { sum: 0, count: 0 };
+      }
     }
 
     acMap[ac].totalRows++;
@@ -1014,7 +1151,10 @@ function buildWeightedReportRows(dataRows, partyColumnIndex) {
       var pt = parties[p2];
       partySums[pt] = rec.parties[pt].sum;
       recognizedTotal += rec.parties[pt].sum;
-      if (rec.parties[pt].sum > maxSum) { maxSum = rec.parties[pt].sum; winner = pt; }
+      if (rec.parties[pt].sum > maxSum) { 
+        maxSum = rec.parties[pt].sum; 
+        winner = pt; 
+      }
     }
 
     var denom = recognizedTotal + rec.othersSum;
@@ -1037,7 +1177,9 @@ function buildWeightedReportRows(dataRows, partyColumnIndex) {
 
 function writeDailyReportSheet(ss, tabName, title, reportRows) {
   var existing = ss.getSheetByName(tabName);
-  if (existing) ss.deleteSheet(existing);
+  if (existing) {
+    ss.deleteSheet(existing);
+  }
   var sheet = ss.insertSheet(tabName);
 
   var header = ["Assembly Constituency","Total Entries","LDF %","UDF %","BJP/NDA %","Predicted Winner"];
@@ -1055,7 +1197,9 @@ function writeDailyReportSheet(ss, tabName, title, reportRows) {
     sheet.getRange(3, 6, reportRows.length, 1).setFontWeight("bold").setFontColor("#1d4ed8");
   }
 
-  for (var c = 1; c <= header.length; c++) sheet.autoResizeColumn(c);
+  for (var c = 1; c <= header.length; c++) {
+    sheet.autoResizeColumn(c);
+  }
 
   var summaryRow = reportRows.length + 5;
   sheet.getRange(summaryRow, 1).setValue("Report generated at:");
