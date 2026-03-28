@@ -1,5 +1,5 @@
 /**
- * Kerala Survey 2026 — Main sheet A:P (deploy this version when columns include labels + GevsVE + Final Values)
+ * Kerala Survey 2026 — Main sheet A:P (deploy when columns include labels + GevsVE + Final Values)
  *
  * A Timestamp
  * B Assembly Constituency
@@ -9,10 +9,13 @@
  * H Age Weight            I Age Label
  * J Vote 2021 AE          K Vote 2024 GE          L Vote 2026 AE
  * M Who Will Win          N Who Will Win Normalized (D×F×H)
- * O GevsVE                P Final Values (O×N) — dashboard uses P as normalizedScore
+ * O GevsVE                P Final Values (O×N)
  *
- * GevsVE matches Excel: numerator(party,B) / COUNTIFS($K:$K,party,$B:$B,B) for UDF/LDF/BJP/NDA and listed ACs; else 1.
- * Sheet filters do not change stored data — if Kasaragod rows “vanish”, clear the column K filter.
+ * IMPORTANT: Dashboard/report weighting uses Final Values (P), not N.
+ *
+ * GevsVE (O) = same as your sheet: GEVSVE_BASE[party][B] / COUNTIFS($K:$K,party,$B:$B,B) for UDF/LDF/BJP/NDA; else 1.
+ * doPost does not run that full recalc inline — it schedules it (~2s) so the form returns fast on large Sheet1.
+ * Sheet filters hide rows but do not remove data; clear filters on K if rows seem “missing”.
  *
  * Form values: whatever the user selects (caste / gender / age) is written to E, G, I when valid;
  * weights in D, F, H always come from demographics + that selection.
@@ -64,13 +67,8 @@ var AC_DEMOGRAPHICS_FALLBACK = {
   Manjeshwaram:       { male:50.38, female:49.62, Muslim:52.89, Christian:2.70,  Nair:0.44,  Ezhava:12.00, Others:25.60, "SC/ST":6.37  }
 };
 
-/**
- * Column O (GevsVE) = same logic as the sheet formula:
- * IF K is UDF/LDF/BJP/NDA and B is one of the ACs below → (constant below) / COUNTIFS($K:$K, party, $B:$B, AC);
- * otherwise → 1.
- * Constants must stay in sync with the deployed Sheet formula.
- */
-var GEVSVE_NUMERATORS = {
+// GevsVE base values (sheet formula constants) — keep in sync with Excel
+var GEVSVE_BASE = {
   "UDF": {
     "Chathannoor": 24.93, "Attingal": 25.02, "Kattakkada": 29.55,
     "Manjeshwaram": 38.14, "Kasaragod": 49.57, "Poonjar": 24.76, "Nemom": 28.85
@@ -419,15 +417,14 @@ function getAgeLabelFromWeight(ageWeight) {
   return getAgeLabelFromAny(ageWeight);
 }
 
-/** @return {number|null} numerator for GevsVE, or null if this (party, AC) is not in the formula table */
-function getGevsveNumerator(party, ac) {
-  var m = GEVSVE_NUMERATORS[party];
-  if (!m || !m.hasOwnProperty(ac)) return null;
-  return m[ac];
+/** Missing (party, AC) → 1, same as Excel inner fallback; calcGevsveForRow treats base===1 as “no table match”. */
+function getBaseGevsveValue(party, ac) {
+  if (GEVSVE_BASE[party] && GEVSVE_BASE[party].hasOwnProperty(ac)) return GEVSVE_BASE[party][ac];
+  return 1;
 }
 
-/** Count rows by AC + 2024 vote (column K = index 10) for GevsVE denominator. */
-function buildCountifsMapForK(dataRows) {
+/** COUNTIFS($K:$K, party, $B:$B, AC) — column K index 10, B index 1 */
+function buildCountifsMapForKandB(dataRows) {
   var map = {};
   for (var i = 0; i < dataRows.length; i++) {
     var ac = normalizeAcName(dataRows[i][1]);
@@ -445,13 +442,13 @@ function calcGevsveForRow(ac, vote2024Party, countMap) {
 
   if (party !== "UDF" && party !== "LDF" && party !== "BJP/NDA") return 1;
 
-  var numerator = getGevsveNumerator(party, acNorm);
-  if (numerator == null) return 1;
+  var base = getBaseGevsveValue(party, acNorm);
+  if (base === 1) return 1;
 
   var denom = countMap[party + "||" + acNorm] || 0;
   if (denom <= 0) return 1;
 
-  return numerator / denom;
+  return base / denom;
 }
 
 /**
@@ -488,9 +485,9 @@ function incrementalUpdateGevsveAfterAppend(sheet, lastRow) {
   }
 
   var targetKey = partyNew + "||" + acNew;
-  var numerator = getGevsveNumerator(partyNew, acNew);
+  var base = getBaseGevsveValue(partyNew, acNew);
   var denom = countMap[targetKey] || 0;
-  var oVal = (numerator == null || denom <= 0) ? 1 : numerator / denom;
+  var oVal = (base === 1 || denom <= 0) ? 1 : base / denom;
 
   var matchIdx = [];
   for (i = 0; i < numRows; i++) {
@@ -602,7 +599,7 @@ function recalcGevsveAndFinalValues() {
 
   var numRows = lr - 1;
   var data = sheet.getRange(2, 1, numRows, 16).getValues();
-  var countMap = buildCountifsMapForK(data);
+  var countMap = buildCountifsMapForKandB(data);
 
   var out = [];
   for (var i = 0; i < data.length; i++) {
