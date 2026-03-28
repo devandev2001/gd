@@ -74,6 +74,19 @@ export const acDemographics = {
     male: 47.55, female: 52.45,
     Muslim: 5.2, Christian: 38.7, Nair: 16.3, Ezhava: 14.0, Others: 17.96, "SC/ST": 7.85,
   },
+  // Proxy rows until FINAL GENDER CASTE CSV includes these ACs (neighbour AC demographics).
+  Nattika: {
+    male: 47.55, female: 52.45,
+    Muslim: 5.2, Christian: 38.7, Nair: 16.3, Ezhava: 14.0, Others: 17.96, "SC/ST": 7.85,
+  },
+  Manalur: {
+    male: 47.55, female: 52.45,
+    Muslim: 5.2, Christian: 38.7, Nair: 16.3, Ezhava: 14.0, Others: 17.96, "SC/ST": 7.85,
+  },
+  Malampuzha: {
+    male: 48.63, female: 51.37,
+    Muslim: 27.9, Christian: 2.94, Nair: 9.66, Ezhava: 22.08, Others: 25.37, "SC/ST": 11.89,
+  },
   Kunnathunad: {
     male: 48.85, female: 51.14,
     Muslim: 19.7, Christian: 35.4, Nair: 11.78, Ezhava: 14.57, Others: 5.42, "SC/ST": 13.13,
@@ -94,6 +107,10 @@ export const acDemographics = {
     male: 50.38, female: 49.62,
     Muslim: 52.89, Christian: 2.7, Nair: 0.44, Ezhava: 12.0, Others: 25.6, "SC/ST": 6.37,
   },
+  Perumbavoor: {
+    male: 48.85, female: 51.14,
+    Muslim: 19.7, Christian: 35.4, Nair: 11.78, Ezhava: 14.57, Others: 5.42, "SC/ST": 13.13,
+  },
 };
 
 const AC_ALIASES = {
@@ -104,6 +121,10 @@ const AC_ALIASES = {
   naiyamam: "Nemom",
   nemeom: "Nemom",
   nemam: "Nemom",
+  nattikaac: "Nattika",
+  manalurac: "Manalur",
+  thrissurac: "Thrissur",
+  perumbaavoor: "Perumbavoor",
 };
 
 const CANONICAL_AC_BY_KEY = Object.keys(acDemographics).reduce((acc, ac) => {
