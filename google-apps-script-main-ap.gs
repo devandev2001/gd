@@ -61,7 +61,13 @@ var AC_DEMOGRAPHICS_FALLBACK = {
   Manjeshwaram:       { male:50.38, female:49.62, Muslim:52.89, Christian:2.70,  Nair:0.44,  Ezhava:12.00, Others:25.60, "SC/ST":6.37  }
 };
 
-var GEVSVE_BASE = {
+/**
+ * Column O (GevsVE) = same logic as the sheet formula:
+ * IF K is UDF/LDF/BJP/NDA and B is one of the ACs below → (constant below) / COUNTIFS($K:$K, party, $B:$B, AC);
+ * otherwise → 1.
+ * Constants must stay in sync with the deployed Sheet formula.
+ */
+var GEVSVE_NUMERATORS = {
   "UDF": {
     "Chathannoor": 24.93, "Attingal": 25.02, "Kattakkada": 29.55,
     "Manjeshwaram": 38.14, "Kasaragod": 49.57, "Poonjar": 24.76, "Nemom": 28.85
@@ -138,7 +144,7 @@ function normalizeAcName(acRaw) {
   if (k === "kattakada") return "Kattakkada";
   if (k === "kowalam") return "Kovalam";
   if (k === "trivandrum") return "Thiruvananthapuram";
-  if (k === "naimam" || k === "nemam" || k === "nemeom" || k === "naiyamam" || k === "neyyattinkara") return "Nemom";
+  if (k === "naimam" || k === "nemam" || k === "nemeom" || k === "naiyamam") return "Nemom";
 
   var dem = getDemographicsMap();
   if (dem[s]) return s;
@@ -395,9 +401,11 @@ function getAgeLabelFromWeight(ageWeight) {
   return getAgeLabelFromAny(ageWeight);
 }
 
-function getBaseGevsveValue(party, ac) {
-  if (GEVSVE_BASE[party] && GEVSVE_BASE[party].hasOwnProperty(ac)) return GEVSVE_BASE[party][ac];
-  return 1;
+/** @return {number|null} numerator for GevsVE, or null if this (party, AC) is not in the formula table */
+function getGevsveNumerator(party, ac) {
+  var m = GEVSVE_NUMERATORS[party];
+  if (!m || !m.hasOwnProperty(ac)) return null;
+  return m[ac];
 }
 
 /** Count rows by AC + 2024 vote (column K = index 10) for GevsVE denominator. */
@@ -419,13 +427,13 @@ function calcGevsveForRow(ac, vote2024Party, countMap) {
 
   if (party !== "UDF" && party !== "LDF" && party !== "BJP/NDA") return 1;
 
-  var base = getBaseGevsveValue(party, acNorm);
-  if (base === 1) return 1;
+  var numerator = getGevsveNumerator(party, acNorm);
+  if (numerator == null) return 1;
 
   var denom = countMap[party + "||" + acNorm] || 0;
   if (denom <= 0) return 1;
 
-  return base / denom;
+  return numerator / denom;
 }
 
 /**
@@ -462,9 +470,9 @@ function incrementalUpdateGevsveAfterAppend(sheet, lastRow) {
   }
 
   var targetKey = partyNew + "||" + acNew;
-  var base = getBaseGevsveValue(partyNew, acNew);
+  var numerator = getGevsveNumerator(partyNew, acNew);
   var denom = countMap[targetKey] || 0;
-  var oVal = (base === 1 || denom <= 0) ? 1 : base / denom;
+  var oVal = (numerator == null || denom <= 0) ? 1 : numerator / denom;
 
   var matchIdx = [];
   for (i = 0; i < numRows; i++) {
