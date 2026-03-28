@@ -46,15 +46,29 @@ var AC_DEMOGRAPHICS_FALLBACK = {
   Kanjirappally:      { male:48.55, female:51.45, Muslim:10.20, Christian:40.00, Nair:23.92, Ezhava:12.00, Others:4.21,  "SC/ST":9.66  },
   Pala:               { male:48.71, female:51.29, Muslim:1.58,  Christian:56.26, Nair:16.41, Ezhava:13.73, Others:3.61,  "SC/ST":8.39  },
   Thrissur:           { male:47.55, female:52.45, Muslim:5.20,  Christian:38.70, Nair:16.30, Ezhava:14.00, Others:17.96, "SC/ST":7.85  },
-  Nattika:            { male:47.55, female:52.45, Muslim:5.20,  Christian:38.70, Nair:16.30, Ezhava:14.00, Others:17.96, "SC/ST":7.85  },
-  Manalur:            { male:47.55, female:52.45, Muslim:5.20,  Christian:38.70, Nair:16.30, Ezhava:14.00, Others:17.96, "SC/ST":7.85  },
-  Malampuzha:         { male:48.63, female:51.37, Muslim:27.90, Christian:2.94,  Nair:9.66,  Ezhava:22.08, Others:25.37, "SC/ST":11.89 },
   Kunnathunad:        { male:48.85, female:51.14, Muslim:19.70, Christian:35.40, Nair:11.78, Ezhava:14.57, Others:5.42,  "SC/ST":13.13 },
-  Perumbavoor:        { male:48.85, female:51.14, Muslim:19.70, Christian:35.40, Nair:11.78, Ezhava:14.57, Others:5.42,  "SC/ST":13.13 },
   Palakkad:           { male:48.63, female:51.37, Muslim:27.90, Christian:2.94,  Nair:9.66,  Ezhava:22.08, Others:25.37, "SC/ST":11.89 },
   "Kozhikode North":  { male:47.41, female:52.59, Muslim:25.10, Christian:7.90,  Nair:14.07, Ezhava:32.16, Others:16.34, "SC/ST":4.43  },
   Kasaragod:          { male:50.00, female:50.00, Muslim:50.42, Christian:2.40,  Nair:3.30,  Ezhava:15.00, Others:22.17, "SC/ST":6.71  },
-  Manjeshwaram:       { male:50.38, female:49.62, Muslim:52.89, Christian:2.70,  Nair:0.44,  Ezhava:12.00, Others:25.60, "SC/ST":6.37  }
+  Manjeshwaram:       { male:50.38, female:49.62, Muslim:52.89, Christian:2.70,  Nair:0.44,  Ezhava:12.00, Others:25.60, "SC/ST":6.37  },
+  /** From Updated Caste sheets + FA roster (Mar 2026) */
+  "Nattika (SC)":     { male:48.09, female:51.91, Muslim:16.31, Christian:14.12, Nair:9.00,  Ezhava:34.70, Others:15.26, "SC/ST":10.45 },
+  Nattika:            { male:48.09, female:51.91, Muslim:16.31, Christian:14.12, Nair:9.00,  Ezhava:34.70, Others:15.26, "SC/ST":10.45 },
+  Malampuzha:         { male:48.76, female:51.24, Muslim:11.31, Christian:6.01,  Nair:10.75, Ezhava:33.89, Others:22.76, "SC/ST":15.26 },
+  Manalur:            { male:48.89, female:51.11, Muslim:21.05, Christian:21.52, Nair:8.60,  Ezhava:29.90, Others:10.67, "SC/ST":8.28  },
+  Perumbavoor:        { male:49.14, female:50.85, Muslim:18.60, Christian:35.50, Nair:12.39, Ezhava:12.39, Others:11.04, "SC/ST":10.07 }
+};
+
+/**
+ * Allowed FA display names per AC (matches survey form). Optional reference; not enforced server-side.
+ */
+var AC_FA_ROSTER = {
+  "Nattika (SC)": ["Roshith", "Amal ks"],
+  "Thrissur": ["Jithesh", "Adarsh v m"],
+  "Malampuzha": ["Jayakrishnan", "Adeep das"],
+  "Chengannur": ["Visakh"],
+  "Manalur": ["Sooraj Krishna", "SANJAY"],
+  "Perumbavoor": ["Sarath Sadan", "JithuKrishanan Babu"]
 };
 
 var _DEMOGRAPHICS_CACHE = null;
@@ -144,10 +158,9 @@ function normalizeAcName(acRaw) {
   if (k === "naimam" || k === "nemam" || k === "nemeom" || k === "naiyamam" || k === "neyyattinkara") return "Nemom";
   if (k === "kasargod" || k === "kasragod" || k === "kasaragode" || k === "kasargode" || k === "kasaragod") return "Kasaragod";
   if (k === "manjeswaram" || k === "manjeshwar" || k === "manjeshwaram" || k === "manjeswar") return "Manjeshwaram";
-  if (k === "nattika ac" || k === "nattika") return "Nattika";
-  if (k === "thrissur ac" || k === "thrissur") return "Thrissur";
-  if (k === "manalur ac" || k === "manalur") return "Manalur";
-  if (k === "malampuzha") return "Malampuzha";
+  if (k === "nattika" || k === "nattika (sc)" || k === "nattika ac" || k === "nattika(sc)") return "Nattika (SC)";
+  if (k === "thrissur ac" || k === "trissur") return "Thrissur";
+  if (k === "manalur ac") return "Manalur";
   if (k === "perumbaavoor" || k === "perumbavoor") return "Perumbavoor";
 
   var dem = getDemographicsMap();

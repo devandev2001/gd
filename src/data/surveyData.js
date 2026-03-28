@@ -52,7 +52,7 @@ export const constituencyData = [
   },
   {
     ac: "Chengannur",
-    fa1: "Visakh (90480 51081)",
+    fa1: "Visakh",
     fa2: "",
   },
   {
@@ -76,34 +76,14 @@ export const constituencyData = [
     fa2: "Sajan P Nair",
   },
   {
-    ac: "Malampuzha",
-    fa1: "Jayakrishnan (62827 22019)",
-    fa2: "Adeep das (81579 60380)",
-  },
-  {
     ac: "Thrissur",
-    fa1: "Jithesh (99477 82867)",
-    fa2: "Adarsh v m (80867 82228)",
-  },
-  {
-    ac: "Nattika",
-    fa1: "Roshith (89212 98580)",
-    fa2: "Amal ks (97464 13554)",
-  },
-  {
-    ac: "Manalur",
-    fa1: "Sooraj Krishna (95626 01787)",
-    fa2: "SANJAY (80789 39655)",
+    fa1: "Jithesh",
+    fa2: "Adarsh v m",
   },
   {
     ac: "Kunnathunad",
     fa1: "Sarath Sadan",
     fa2: "Adarshjith",
-  },
-  {
-    ac: "Perumbavoor",
-    fa1: "Sarath Sadan (85929 59371)",
-    fa2: "JithuKrishanan Babu (81118 20173)",
   },
   {
     ac: "Palakkad",
@@ -124,6 +104,26 @@ export const constituencyData = [
     ac: "Manjeshwaram",
     fa1: "Viswajith BV",
     fa2: "Vishnu B",
+  },
+  {
+    ac: "Nattika (SC)",
+    fa1: "Roshith",
+    fa2: "Amal ks",
+  },
+  {
+    ac: "Malampuzha",
+    fa1: "Jayakrishnan",
+    fa2: "Adeep das",
+  },
+  {
+    ac: "Manalur",
+    fa1: "Sooraj Krishna",
+    fa2: "SANJAY",
+  },
+  {
+    ac: "Perumbavoor",
+    fa1: "Sarath Sadan",
+    fa2: "JithuKrishanan Babu",
   },
 ];
 

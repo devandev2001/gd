@@ -15,16 +15,16 @@ export const AC_NUMBER_BY_NAME = {
   Poonjar: "101",
   Kanjirappally: "100",
   Pala: "93",
-  Malampuzha: "58",
   Thrissur: "67",
-  Nattika: "68",
-  Manalur: "69",
   Kunnathunad: "84",
-  Perumbavoor: "74",
   Palakkad: "56",
   "Kozhikode North": "27",
   Kasaragod: "2",
   Manjeshwaram: "1",
+  Perumbavoor: "74",
+  "Nattika (SC)": "68",
+  Manalur: "64",
+  Malampuzha: "55",
 };
 
 export function getAcNo(acName) {

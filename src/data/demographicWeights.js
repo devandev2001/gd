@@ -74,19 +74,6 @@ export const acDemographics = {
     male: 47.55, female: 52.45,
     Muslim: 5.2, Christian: 38.7, Nair: 16.3, Ezhava: 14.0, Others: 17.96, "SC/ST": 7.85,
   },
-  // Proxy rows until FINAL GENDER CASTE CSV includes these ACs (neighbour AC demographics).
-  Nattika: {
-    male: 47.55, female: 52.45,
-    Muslim: 5.2, Christian: 38.7, Nair: 16.3, Ezhava: 14.0, Others: 17.96, "SC/ST": 7.85,
-  },
-  Manalur: {
-    male: 47.55, female: 52.45,
-    Muslim: 5.2, Christian: 38.7, Nair: 16.3, Ezhava: 14.0, Others: 17.96, "SC/ST": 7.85,
-  },
-  Malampuzha: {
-    male: 48.63, female: 51.37,
-    Muslim: 27.9, Christian: 2.94, Nair: 9.66, Ezhava: 22.08, Others: 25.37, "SC/ST": 11.89,
-  },
   Kunnathunad: {
     male: 48.85, female: 51.14,
     Muslim: 19.7, Christian: 35.4, Nair: 11.78, Ezhava: 14.57, Others: 5.42, "SC/ST": 13.13,
@@ -107,9 +94,21 @@ export const acDemographics = {
     male: 50.38, female: 49.62,
     Muslim: 52.89, Christian: 2.7, Nair: 0.44, Ezhava: 12.0, Others: 25.6, "SC/ST": 6.37,
   },
+  "Nattika (SC)": {
+    male: 48.09, female: 51.91,
+    Muslim: 16.31, Christian: 14.12, Nair: 9.0, Ezhava: 34.7, Others: 15.26, "SC/ST": 10.45,
+  },
+  Malampuzha: {
+    male: 48.76, female: 51.24,
+    Muslim: 11.31, Christian: 6.01, Nair: 10.75, Ezhava: 33.89, Others: 22.76, "SC/ST": 15.26,
+  },
+  Manalur: {
+    male: 48.89, female: 51.11,
+    Muslim: 21.05, Christian: 21.52, Nair: 8.6, Ezhava: 29.9, Others: 10.67, "SC/ST": 8.28,
+  },
   Perumbavoor: {
-    male: 48.85, female: 51.14,
-    Muslim: 19.7, Christian: 35.4, Nair: 11.78, Ezhava: 14.57, Others: 5.42, "SC/ST": 13.13,
+    male: 49.14, female: 50.85,
+    Muslim: 18.6, Christian: 35.5, Nair: 12.39, Ezhava: 12.39, Others: 11.04, "SC/ST": 10.07,
   },
 };
 
@@ -121,10 +120,12 @@ const AC_ALIASES = {
   naiyamam: "Nemom",
   nemeom: "Nemom",
   nemam: "Nemom",
-  nattikaac: "Nattika",
-  manalurac: "Manalur",
+  nattika: "Nattika (SC)",
+  nattikasc: "Nattika (SC)",
   thrissurac: "Thrissur",
+  manalurac: "Manalur",
   perumbaavoor: "Perumbavoor",
+  perumbavoor: "Perumbavoor",
 };
 
 const CANONICAL_AC_BY_KEY = Object.keys(acDemographics).reduce((acc, ac) => {
