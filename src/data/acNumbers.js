@@ -22,7 +22,7 @@ export const AC_NUMBER_BY_NAME = {
   Kasaragod: "2",
   Manjeshwaram: "1",
   Perumbavoor: "74",
-  "Nattika (SC)": "68",
+  Nattika: "68",
   Manalur: "64",
   Malampuzha: "55",
 };
