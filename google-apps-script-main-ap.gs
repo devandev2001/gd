@@ -177,12 +177,31 @@ var AC_DEMOGRAPHICS_FALLBACK = {
  * Allowed FA display names per AC (matches survey form). Optional reference; not enforced server-side.
  */
 var AC_FA_ROSTER = {
+  "Kattakkada": ["Dinu S", "Ajin Anand"],
+  "Kovalam": ["Anandhu RS", "Arun R"],
+  "Vattiyoorkavu": ["Gokul G", "Jijomon SP"],
+  "Thiruvananthapuram": ["Sudheesh", "Akhil R"],
+  "Attingal": ["Anand KS", "SREEHARI .S"],
+  "Chathannoor": ["Aromal A", "Sajikumar S"],
+  "Aranmula": ["Saneesh", "Syam Chandran"],
+  "Thiruvalla": ["Nikhil MR", "Nidhin P Nair"],
+  "Chengannur": ["Aswin S", "Ananthu R Pillai"],
+  "Adoor": ["KG Gokulkrishnan Nair", "Vyshakh  V"],
+  "Poonjar": ["Sajan P Nair", "Sreehari Babu"],
+  "Pala": ["Anirudh Vinod", "Vishnu B Ambalammatom"],
+  "Thrissur": ["Jithesh", "Adarsh v m", "Yadhukrishnan MP", "Sreehari"],
+  "Kunnathunad": ["Sarath Sadan", "Adarshjith"],
+  "Palakkad": ["Goshal krishna", "Vignesh R"],
+  "Kozhikode North": ["Abhishek", "Abhinav KP"],
+  "Kasaragod": ["Sivadas MM"],
+  "Manjeshwaram": ["Viswajith BV", "Vishnu B"],
+  "Nemom": ["Anandhu RS", "Arun R"],
+  "Kazhakkoottam": ["Abhinanad BS"],
   "Nattika": ["Roshith", "Amal ks"],
-  "Thrissur": ["Jithesh", "Adarsh v m"],
   "Malampuzha": ["Jayakrishnan", "Adeep das"],
-  "Chengannur": ["Visakh"],
   "Manalur": ["Sooraj Krishna", "SANJAY"],
-  "Perumbavoor": ["Sarath Sadan", "JithuKrishanan Babu"]
+  "Perumbavoor": ["Sarath Sadan", "JithuKrishanan Babu"],
+  "Kanjirappally": ["Gokul PG", "Harikrishnan AB"]
 };
 
 var _DEMOGRAPHICS_CACHE = null;
@@ -278,6 +297,7 @@ function normalizeAcName(acRaw) {
   if (k === "chengannur") return "Chengannur";
   if (k === "manalur ac" || k === "manalur") return "Manalur";
   if (k === "perumbaavoor" || k === "perumbavoor ac" || k === "perumbavoor") return "Perumbavoor";
+  if (k === "kanjirapalli" || k === "kanjirappally" || k === "kanjirappalli") return "Kanjirappally";
 
   var dem = getDemographicsMap();
   if (dem[s]) {

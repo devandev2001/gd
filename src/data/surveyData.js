@@ -48,7 +48,7 @@ export const constituencyData = [
   {
     "ac": "Attingal",
     "fa1": "Anand KS",
-    "fa2": "Sreehari S"
+    "fa2": "SREEHARI .S"
   },
   {
     "ac": "Azhikode",
@@ -97,8 +97,8 @@ export const constituencyData = [
   },
   {
     "ac": "Chengannur",
-    "fa1": "Visakh",
-    "fa2": ""
+    "fa1": "Aswin S",
+    "fa2": "Ananthu R Pillai"
   },
   {
     "ac": "Cherthala",
@@ -242,8 +242,8 @@ export const constituencyData = [
   },
   {
     "ac": "Kazhakkoottam",
-    "fa1": "ASWIN DAS T.S.",
-    "fa2": "Anandu Ashok A"
+    "fa1": "Abhinanad BS",
+    "fa2": ""
   },
   {
     "ac": "Kochi",
@@ -302,8 +302,8 @@ export const constituencyData = [
   },
   {
     "ac": "Kovalam",
-    "fa1": "",
-    "fa2": ""
+    "fa1": "Anandhu RS",
+    "fa2": "Arun R"
   },
   {
     "ac": "Kozhikode",
@@ -463,11 +463,11 @@ export const constituencyData = [
   {
     "ac": "Pala",
     "fa1": "Anirudh Vinod",
-    "fa2": "Sajan P Nair"
+    "fa2": "Vishnu B Ambalammatom"
   },
   {
     "ac": "Palakkad",
-    "fa1": "Goshal Krishna",
+    "fa1": "Goshal krishna",
     "fa2": "Vignesh R"
   },
   {
@@ -532,7 +532,7 @@ export const constituencyData = [
   },
   {
     "ac": "Poonjar",
-    "fa1": "Vishnu B Ambalammatom",
+    "fa1": "Sajan P Nair",
     "fa2": "Sreehari Babu"
   },
   {
