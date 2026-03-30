@@ -44,8 +44,40 @@ export default function SurveyForm() {
   const [attempted, setAttempted] = useState(false);
   const formRef = useRef();
 
+  // Normalize AC names to avoid FA dropdown missing due to spelling variants
+  // (e.g., tracker CSV uses "Kazhakootam" while form list uses "Kazhakkoottam").
+  const normalizeAcKey = (v) =>
+    String(v || "")
+      .toLowerCase()
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .replace(/\(sc\)/g, "")
+      .replace(/ac/g, "")
+      .replace(/[^a-z]/g, "");
+
+  const CANONICAL_AC_ALIAS = {
+    kazhakootam: "Kazhakkoottam",
+    kazhakkoottam: "Kazhakkoottam",
+    nemom: "Nemom",
+    nemam: "Nemom",
+    nattika: "Nattika",
+    nattikaac: "Nattika",
+    thrissur: "Thrissur",
+    thrissurac: "Thrissur",
+    manalur: "Manalur",
+    manalurac: "Manalur",
+    perumbaavoor: "Perumbavoor",
+    perumbavoor: "Perumbavoor",
+    kanjirapalli: "Kanjirappally",
+    kanjirappally: "Kanjirappally",
+  };
+
+  const canonicalizeAc = (name) => {
+    const k = normalizeAcKey(name);
+    return CANONICAL_AC_ALIAS[k] || name;
+  };
+
   // Derived: FA names for selected AC
-  const selectedAC = constituencyData.find((c) => c.ac === form.ac);
+  const selectedAC = constituencyData.find((c) => normalizeAcKey(c.ac) === normalizeAcKey(form.ac));
   const faNames = selectedAC
     ? [selectedAC.fa1, selectedAC.fa2, selectedAC.fa3, selectedAC.fa4].filter(Boolean)
     : [];
@@ -55,7 +87,7 @@ export default function SurveyForm() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => {
-      const updated = { ...prev, [name]: value };
+      const updated = { ...prev, [name]: name === "ac" ? canonicalizeAc(value) : value };
       if (name === "ac") updated.faName = "";
       return updated;
     });

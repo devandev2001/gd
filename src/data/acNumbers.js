@@ -27,9 +27,26 @@ export const AC_NUMBER_BY_NAME = {
   Malampuzha: "55",
 };
 
+function normalizeAcKey(v) {
+  return String(v || "")
+    .toLowerCase()
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/\(sc\)/g, "")
+    .replace(/ac/g, "")
+    .replace(/[^a-z]/g, "");
+}
+
 export function getAcNo(acName) {
   const key = String(acName || "").trim();
-  return AC_NUMBER_BY_NAME[key] || "";
+  if (AC_NUMBER_BY_NAME[key]) return AC_NUMBER_BY_NAME[key];
+
+  // Aliases/typos seen in tracker sheets — keep display stable while submitted `ac` stays canonical.
+  const k = normalizeAcKey(key);
+  if (k === "kazhakootam") return AC_NUMBER_BY_NAME.Kazhakkoottam || "";
+  if (k === "perumbaavoor") return AC_NUMBER_BY_NAME.Perumbavoor || "";
+  if (k === "kanjirapalli") return AC_NUMBER_BY_NAME.Kanjirappally || "";
+
+  return "";
 }
 
 export function formatAcSelectLabel(acName) {
