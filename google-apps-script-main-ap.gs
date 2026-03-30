@@ -189,7 +189,7 @@ var AC_FA_ROSTER = {
   "Adoor": ["KG Gokulkrishnan Nair", "Vyshakh  V"],
   "Poonjar": ["Sajan P Nair", "Sreehari Babu"],
   "Pala": ["Anirudh Vinod", "Vishnu B Ambalammatom"],
-  "Thrissur": ["Jithesh", "Adarsh v m", "Yadhukrishnan MP", "Sreehari"],
+  "Thrissur": ["Jitesh", "Akshay", "Sree Hari"],
   "Kunnathunad": ["Sarath Sadan", "Adarshjith"],
   "Palakkad": ["Goshal krishna", "Vignesh R"],
   "Kozhikode North": ["Abhishek", "Abhinav KP"],

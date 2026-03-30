@@ -23,7 +23,7 @@ export const constituencyData = [
   { "ac": "Poonjar", "fa1": "Sajan P Nair", "fa2": "Sreehari Babu" },
   { "ac": "Thiruvananthapuram", "fa1": "Sudheesh", "fa2": "Akhil R" },
   { "ac": "Thiruvalla", "fa1": "Nikhil MR", "fa2": "Nidhin P Nair" },
-  { "ac": "Thrissur", "fa1": "Jithesh", "fa2": "Adarsh v m" },
+  { "ac": "Thrissur", "fa1": "Jitesh", "fa2": "Akshay", "fa3": "Sree Hari" },
   { "ac": "Vattiyoorkavu", "fa1": "Gokul G", "fa2": "Jijomon SP" }
 ];
 
