@@ -260,6 +260,11 @@ function cellToYmdKolkata(cell) {
     if (isNaN(cell.getTime())) return null;
     return Utilities.formatDate(cell, "Asia/Kolkata", "yyyy-MM-dd");
   }
+  if (typeof cell === "number" && isFinite(cell) && cell > 0) {
+    var fromSerial = new Date((cell - 25569) * 86400000);
+    if (isNaN(fromSerial.getTime())) return null;
+    return Utilities.formatDate(fromSerial, "Asia/Kolkata", "yyyy-MM-dd");
+  }
   var s = String(cell).trim();
   var m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
   if (m) return m[1] + "-" + m[2] + "-" + m[3];
@@ -323,6 +328,21 @@ function timestampPatternsForDateKey(dateStr) {
     Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
     Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12
   };
+  var isoOnly = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoOnly) {
+    var yIso = parseInt(isoOnly[1], 10);
+    var moIso = parseInt(isoOnly[2], 10);
+    var dIso = parseInt(isoOnly[3], 10);
+    var calIso = new Date(yIso, moIso - 1, dIso);
+    patterns.push(Utilities.formatDate(calIso, tz, "d/M/yyyy"));
+    patterns.push(Utilities.formatDate(calIso, tz, "dd/MM/yyyy"));
+    patterns.push(Utilities.formatDate(calIso, tz, "d/M/yy"));
+    patterns.push(Utilities.formatDate(calIso, tz, "dd/MM/yy"));
+    patterns.push(Utilities.formatDate(calIso, tz, "M/d/yyyy"));
+    patterns.push(Utilities.formatDate(calIso, tz, "MM/dd/yyyy"));
+    patterns.push(dIso + "/" + moIso + "/" + yIso);
+    patterns.push(pad2(dIso) + "/" + pad2(moIso) + "/" + yIso);
+  }
   var mon = dateStr.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
   if (mon) {
     var day = parseInt(mon[1], 10);

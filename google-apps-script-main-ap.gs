@@ -976,6 +976,15 @@ function cellToYmdKolkata(cell) {
     return Utilities.formatDate(cell, "Asia/Kolkata", "yyyy-MM-dd");
   }
 
+  // Sheets sometimes returns a serial number (days since 1899-12-30) instead of Date
+  if (typeof cell === "number" && isFinite(cell) && cell > 0) {
+    var fromSerial = new Date((cell - 25569) * 86400000);
+    if (isNaN(fromSerial.getTime())) {
+      return null;
+    }
+    return Utilities.formatDate(fromSerial, "Asia/Kolkata", "yyyy-MM-dd");
+  }
+
   var s = String(cell).trim();
 
   // 1) ISO yyyy-mm-dd (matches sv-SE Kolkata strings like "2026-04-01 15:30:45" and Sheets ISO)
@@ -1050,6 +1059,23 @@ function timestampPatternsForDateKey(dateStr) {
   var tz = "Asia/Kolkata";
   var patterns = [String(dateStr)];
   var monthMap = { Jan:1, Feb:2, Mar:3, Apr:4, May:5, Jun:6, Jul:7, Aug:8, Sep:9, Oct:10, Nov:11, Dec:12 };
+
+  // yyyy-mm-dd (admin date picker) → add slash formats actually stored in Sheet1 (e.g. "1/4/2026, 7:50 AM")
+  var isoOnly = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoOnly) {
+    var yIso = parseInt(isoOnly[1], 10);
+    var moIso = parseInt(isoOnly[2], 10);
+    var dIso = parseInt(isoOnly[3], 10);
+    var calIso = new Date(yIso, moIso - 1, dIso);
+    patterns.push(Utilities.formatDate(calIso, tz, "d/M/yyyy"));
+    patterns.push(Utilities.formatDate(calIso, tz, "dd/MM/yyyy"));
+    patterns.push(Utilities.formatDate(calIso, tz, "d/M/yy"));
+    patterns.push(Utilities.formatDate(calIso, tz, "dd/MM/yy"));
+    patterns.push(Utilities.formatDate(calIso, tz, "M/d/yyyy"));
+    patterns.push(Utilities.formatDate(calIso, tz, "MM/dd/yyyy"));
+    patterns.push(dIso + "/" + moIso + "/" + yIso);
+    patterns.push(pad2(dIso) + "/" + pad2(moIso) + "/" + yIso);
+  }
 
   var mon = dateStr.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
   if (mon) {
