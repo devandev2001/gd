@@ -59,25 +59,33 @@ function timestampPatternsForDateKey(dateStr) {
   return patterns;
 }
 
-function legacySubstringRowMatch(row, dateStr) {
+function legacySubstringRowMatch(tsCell, dateStr) {
   if (!dateStr) return true;
-  var ts = String(row[0]);
+  var ts = String(tsCell);
   var patterns = timestampPatternsForDateKey(dateStr);
   for (var i = 0; i < patterns.length; i++) if (ts.indexOf(patterns[i]) !== -1) return true;
   return false;
 }
 
-function rowMatchesDateFilter(row, dateStr) {
+/** Prefer formatted cell text for date logic — avoids US-locale Date serials becoming the wrong calendar day. */
+function timestampForDateFilter(displayVal, rawVal) {
+  if (displayVal !== null && displayVal !== undefined && String(displayVal).trim() !== "") {
+    return displayVal;
+  }
+  return rawVal;
+}
+
+function rowMatchesDateFilter(tsCell, dateStr) {
   if (!dateStr) return true;
   var targetYmd = parseDateParamToYmd(dateStr);
   if (targetYmd) {
-    var rowYmd = cellToYmdKolkata(row[0]);
+    var rowYmd = cellToYmdKolkata(tsCell);
     if (rowYmd) return rowYmd === targetYmd;
   }
-  return legacySubstringRowMatch(row, dateStr);
+  return legacySubstringRowMatch(tsCell, dateStr);
 }
 
-function mapRowsToEntries(filtered) {
+function mapRowsToEntries(filtered, displayTimestamps) {
   var headers = [
     "timestamp","ac","faName",
     "casteWeight","casteLabel",
@@ -90,10 +98,13 @@ function mapRowsToEntries(filtered) {
     "finalValue"
   ];
 
-  return filtered.map(function(row) {
+  return filtered.map(function(row, idx) {
     var obj = {};
     headers.forEach(function(h, i) { obj[h] = row[i]; });
     obj.normalizedScore = row[15];
+    if (displayTimestamps && displayTimestamps[idx] !== undefined && displayTimestamps[idx] !== null && String(displayTimestamps[idx]).trim() !== "") {
+      obj.timestamp = displayTimestamps[idx];
+    }
     return obj;
   });
 }
@@ -106,8 +117,18 @@ function getEntriesForDate(dateStr) {
 
   var numRows = lastRow - 1;
   var data = sheet.getRange(2, 1, numRows, 16).getValues();
-  var filtered = dateStr ? data.filter(function(row) { return rowMatchesDateFilter(row, dateStr); }) : data;
-  var entries = mapRowsToEntries(filtered);
+  var displayA = sheet.getRange(2, 1, numRows, 1).getDisplayValues();
+  var filtered = [];
+  var dispTs = [];
+  var i;
+  for (i = 0; i < numRows; i++) {
+    var tsF = timestampForDateFilter(displayA[i][0], data[i][0]);
+    if (!dateStr || rowMatchesDateFilter(tsF, dateStr)) {
+      filtered.push(data[i]);
+      dispTs.push(displayA[i][0]);
+    }
+  }
+  var entries = mapRowsToEntries(filtered, dispTs);
   return { entries: entries, total: entries.length };
 }
 
@@ -119,14 +140,25 @@ function getEntriesForDateRange(fromYmd, toYmd) {
 
   var numRows = lastRow - 1;
   var data = sheet.getRange(2, 1, numRows, 16).getValues();
-  var filtered = data.filter(function(row) {
-    var rowYmd = cellToYmdKolkata(row[0]);
-    if (rowYmd) return rowYmd >= fromYmd && rowYmd <= toYmd;
-    if (fromYmd === toYmd) return rowMatchesDateFilter(row, fromYmd);
-    return false;
-  });
+  var displayA = sheet.getRange(2, 1, numRows, 1).getDisplayValues();
+  var filtered = [];
+  var dispTs = [];
+  for (var j = 0; j < numRows; j++) {
+    var tsF = timestampForDateFilter(displayA[j][0], data[j][0]);
+    var rowYmd = cellToYmdKolkata(tsF);
+    var include = false;
+    if (rowYmd) {
+      include = rowYmd >= fromYmd && rowYmd <= toYmd;
+    } else if (fromYmd === toYmd) {
+      include = rowMatchesDateFilter(tsF, fromYmd);
+    }
+    if (include) {
+      filtered.push(data[j]);
+      dispTs.push(displayA[j][0]);
+    }
+  }
 
-  var entries = mapRowsToEntries(filtered);
+  var entries = mapRowsToEntries(filtered, dispTs);
   return { entries: entries, total: entries.length };
 }
 
