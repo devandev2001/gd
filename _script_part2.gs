@@ -52,6 +52,7 @@ function getGenderLabelFromWeight(ac, genderWeight) {
   var fd = Math.abs(femaleW - w);
   if (md < fd) return "Male";
   if (fd < md) return "Female";
+  if (Math.abs(acData.male - acData.female) < 1e-9) return "Unknown";
   return femaleW >= maleW ? "Female" : "Male";
 }
 

@@ -298,6 +298,19 @@ function normalizeAcName(acRaw) {
   if (k === "manalur ac" || k === "manalur") return "Manalur";
   if (k === "perumbaavoor" || k === "perumbavoor ac" || k === "perumbavoor") return "Perumbavoor";
   if (k === "kanjirapalli" || k === "kanjirappally" || k === "kanjirappalli") return "Kanjirappally";
+  // Kunnathunad — common sheet/typo variants (if AC unknown, caste×gender×age norm stays 0)
+  if (
+    k === "kunnathunad" ||
+    k === "kunnathunad ac" ||
+    k === "kunnathumar" ||
+    k === "kunnathunadu" ||
+    k === "kunnathunadu ac" ||
+    k === "kunnathunadac" ||
+    k === "gunnar thunadu" ||
+    k === "kunnathumad"
+  ) {
+    return "Kunnathunad";
+  }
 
   var dem = getDemographicsMap();
   if (dem[s]) {
@@ -629,6 +642,10 @@ function getGenderLabelFromWeight(ac, genderWeight) {
   if (fD < mD) {
     return "Female";
   }
+  // Equal male/female % (e.g. Kasaragod 50/50): same weight maps to both — cannot infer from weight alone.
+  if (Math.abs(acData.male - acData.female) < 1e-9) {
+    return "Unknown";
+  }
   if (acData.female >= acData.male) {
     return "Female";
   }
@@ -959,9 +976,27 @@ function cellToYmdKolkata(cell) {
     return Utilities.formatDate(cell, "Asia/Kolkata", "yyyy-MM-dd");
   }
 
-  var s = String(cell);
+  var s = String(cell).trim();
 
-  var m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  // 1) ISO yyyy-mm-dd (matches sv-SE Kolkata strings like "2026-04-01 15:30:45" and Sheets ISO)
+  var m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    return m[1] + "-" + m[2] + "-" + m[3];
+  }
+
+  // 2) DD-MM-YYYY with dashes (some browsers / CSV; en-IN sometimes uses dashes)
+  m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})(?:\s|,|$)/);
+  if (m) {
+    var dDm = parseInt(m[1], 10);
+    var moDm = parseInt(m[2], 10);
+    var yDm = parseInt(m[3], 10);
+    if (moDm >= 1 && moDm <= 12 && dDm >= 1 && dDm <= 31 && yDm >= 1900 && yDm <= 2100) {
+      return yDm + "-" + pad2(moDm) + "-" + pad2(dDm);
+    }
+  }
+
+  // 3) d/m/y — treated as DAY/MONTH/YEAR (India). Note: ambiguous with US m/d/y for days ≤12.
+  m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
   if (m) {
     var d = parseInt(m[1], 10);
     var mo = parseInt(m[2], 10);
@@ -970,11 +1005,6 @@ function cellToYmdKolkata(cell) {
       y += 2000;
     }
     return y + "-" + pad2(mo) + "-" + pad2(d);
-  }
-
-  m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
-  if (m) {
-    return m[1] + "-" + m[2] + "-" + m[3];
   }
 
   var monthMap = { Jan:1, Feb:2, Mar:3, Apr:4, May:5, Jun:6, Jul:7, Aug:8, Sep:9, Oct:10, Nov:11, Dec:12 };

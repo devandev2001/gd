@@ -260,8 +260,19 @@ function cellToYmdKolkata(cell) {
     if (isNaN(cell.getTime())) return null;
     return Utilities.formatDate(cell, "Asia/Kolkata", "yyyy-MM-dd");
   }
-  var s = String(cell);
-  var m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  var s = String(cell).trim();
+  var m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return m[1] + "-" + m[2] + "-" + m[3];
+  m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})(?:\s|,|$)/);
+  if (m) {
+    var dDm = parseInt(m[1], 10);
+    var moDm = parseInt(m[2], 10);
+    var yDm = parseInt(m[3], 10);
+    if (moDm >= 1 && moDm <= 12 && dDm >= 1 && dDm <= 31 && yDm >= 1900 && yDm <= 2100) {
+      return yDm + "-" + pad2(moDm) + "-" + pad2(dDm);
+    }
+  }
+  m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
   if (m) {
     var d = parseInt(m[1], 10);
     var mo = parseInt(m[2], 10);
@@ -269,8 +280,6 @@ function cellToYmdKolkata(cell) {
     if (y < 100) y += 2000;
     return y + "-" + pad2(mo) + "-" + pad2(d);
   }
-  m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return m[1] + "-" + m[2] + "-" + m[3];
   var monthMap = {
     Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
     Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12

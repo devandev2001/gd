@@ -11,6 +11,14 @@ import {
 import { formatAcSelectLabel, sortConstituenciesByAcNo } from "../data/acNumbers";
 import "./SurveyForm.css";
 
+/** Wall clock in Asia/Kolkata as `yyyy-mm-dd HH:mm:ss` — unambiguous for Apps Script date filters (avoids en-IN 1/4/2026 vs 4/1/2026). */
+function timestampKolkata() {
+  return new Date().toLocaleString("sv-SE", {
+    timeZone: "Asia/Kolkata",
+    hour12: false,
+  });
+}
+
 const initialForm = {
   ac: "",
   faName: "",
@@ -139,9 +147,7 @@ export default function SurveyForm() {
         // Send labels only — Google Apps Script resolves weights from AC_DEMOGRAPHICS
         // so scores stay correct after you update the script (avoids stale cached JS sending 0).
         const payload = {
-          timestamp: new Date().toLocaleString("en-IN", {
-            timeZone: "Asia/Kolkata",
-          }),
+          timestamp: timestampKolkata(),
           ac: form.ac,
           faName: form.faName,
           caste: form.caste,
