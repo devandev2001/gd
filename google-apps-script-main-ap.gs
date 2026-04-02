@@ -514,12 +514,27 @@ function computeRakingWeight(targetFrac, binCount, nAc) {
   return w;
 }
 
+/**
+ * Labels for J/K (2021 AE / 2024 GE). Never leave blank: missing payload → "Not Voted"
+ * so the sheet stays consistent with L/M (2026 / who will win).
+ */
 function voteForSheet(v) {
+  var raw = String(v === null || v === undefined ? "" : v).trim();
+  if (!raw) {
+    return "Not Voted";
+  }
   var p = normalizeParty(v);
   if (p === "UDF" || p === "LDF" || p === "BJP/NDA") {
     return p;
   }
-  return String(v === null || v === undefined ? "" : v).trim();
+  return raw;
+}
+
+/**
+ * Labels for L/M (2026 vote / who will win). Empty → "Others" (three-front contest default).
+ */
+function votePredictionForSheet(v) {
+  return normalizeParty(v);
 }
 
 function ensureHeaders(sheet) {
@@ -907,10 +922,10 @@ function fastRecalcDemographicWeightsAfterAppend(sheet, lastRow) {
     return;
   }
 
-  var dVals = sheet.getRange(2, 4, lastRow, 4).getValues();
-  var fVals = sheet.getRange(2, 6, lastRow, 6).getValues();
-  var hVals = sheet.getRange(2, 8, lastRow, 8).getValues();
-  var nVals = sheet.getRange(2, 14, lastRow, 14).getValues();
+  var dVals = sheet.getRange(2, 4, numRows, 1).getValues();
+  var fVals = sheet.getRange(2, 6, numRows, 1).getValues();
+  var hVals = sheet.getRange(2, 8, numRows, 1).getValues();
+  var nVals = sheet.getRange(2, 14, numRows, 1).getValues();
 
   for (i = 0; i < numRows; i++) {
     if (normalizeAcName(block[i][0]) !== acNew) {
@@ -939,14 +954,14 @@ function fastRecalcDemographicWeightsAfterAppend(sheet, lastRow) {
     nVals[i][0] = w.norm;
   }
 
-  sheet.getRange(2, 4, lastRow, 4).setValues(dVals);
-  sheet.getRange(2, 6, lastRow, 6).setValues(fVals);
-  sheet.getRange(2, 8, lastRow, 8).setValues(hVals);
-  sheet.getRange(2, 14, lastRow, 14).setValues(nVals);
-  sheet.getRange(2, 4, lastRow, 4).setNumberFormat("0.00000000");
-  sheet.getRange(2, 6, lastRow, 6).setNumberFormat("0.00000000");
-  sheet.getRange(2, 8, lastRow, 8).setNumberFormat("0.00000000");
-  sheet.getRange(2, 14, lastRow, 14).setNumberFormat("0.0000000000");
+  sheet.getRange(2, 4, numRows, 1).setValues(dVals);
+  sheet.getRange(2, 6, numRows, 1).setValues(fVals);
+  sheet.getRange(2, 8, numRows, 1).setValues(hVals);
+  sheet.getRange(2, 14, numRows, 1).setValues(nVals);
+  sheet.getRange(2, 4, numRows, 1).setNumberFormat("0.00000000");
+  sheet.getRange(2, 6, numRows, 1).setNumberFormat("0.00000000");
+  sheet.getRange(2, 8, numRows, 1).setNumberFormat("0.00000000");
+  sheet.getRange(2, 14, numRows, 1).setNumberFormat("0.0000000000");
 }
 
 /**
@@ -1083,10 +1098,10 @@ function recalcAllDemographicWeightsAndNormalized() {
     ageByAc[ac][ageKey] = (ageByAc[ac][ageKey] || 0) + 1;
   }
 
-  var dVals = sheet.getRange(2, 4, lr, 4).getValues();
-  var fVals = sheet.getRange(2, 6, lr, 6).getValues();
-  var hVals = sheet.getRange(2, 8, lr, 8).getValues();
-  var nVals = sheet.getRange(2, 14, lr, 14).getValues();
+  var dVals = sheet.getRange(2, 4, numRows, 1).getValues();
+  var fVals = sheet.getRange(2, 6, numRows, 1).getValues();
+  var hVals = sheet.getRange(2, 8, numRows, 1).getValues();
+  var nVals = sheet.getRange(2, 14, numRows, 1).getValues();
 
   for (i = 0; i < numRows; i++) {
     var ac2 = normalizeAcName(block[i][0]);
@@ -1117,14 +1132,14 @@ function recalcAllDemographicWeightsAndNormalized() {
     nVals[i][0] = w.norm;
   }
 
-  sheet.getRange(2, 4, lr, 4).setValues(dVals);
-  sheet.getRange(2, 6, lr, 6).setValues(fVals);
-  sheet.getRange(2, 8, lr, 8).setValues(hVals);
-  sheet.getRange(2, 14, lr, 14).setValues(nVals);
-  sheet.getRange(2, 4, lr, 4).setNumberFormat("0.00000000");
-  sheet.getRange(2, 6, lr, 6).setNumberFormat("0.00000000");
-  sheet.getRange(2, 8, lr, 8).setNumberFormat("0.00000000");
-  sheet.getRange(2, 14, lr, 14).setNumberFormat("0.0000000000");
+  sheet.getRange(2, 4, numRows, 1).setValues(dVals);
+  sheet.getRange(2, 6, numRows, 1).setValues(fVals);
+  sheet.getRange(2, 8, numRows, 1).setValues(hVals);
+  sheet.getRange(2, 14, numRows, 1).setValues(nVals);
+  sheet.getRange(2, 4, numRows, 1).setNumberFormat("0.00000000");
+  sheet.getRange(2, 6, numRows, 1).setNumberFormat("0.00000000");
+  sheet.getRange(2, 8, numRows, 1).setNumberFormat("0.00000000");
+  sheet.getRange(2, 14, numRows, 1).setNumberFormat("0.0000000000");
 }
 
 function doPost(e) {
@@ -1135,8 +1150,8 @@ function doPost(e) {
 
     var data = JSON.parse(e.postData.contents);
     var ac = normalizeAcName(data.ac);
-    var vote2026 = normalizeParty(data.vote2026);
-    var whoWillWin = normalizeParty(data.whoWillWin);
+    var vote2026 = votePredictionForSheet(data.vote2026);
+    var whoWillWin = votePredictionForSheet(data.whoWillWin);
 
     var w = resolveWeights(ac, data.caste, data.gender, data.age);
     var casteLabel = casteLabelForSheet(ac, data.caste, w.casteW);
@@ -1671,6 +1686,53 @@ function fixTextRows() {
   recalcAllDemographicWeightsAndNormalized();
   recalcGevsveAndFinalValues();
   Logger.log("fixTextRows updated " + numRows + " rows.");
+}
+
+/**
+ * One-time / occasional repair: rows where J–M are blank get explicit labels
+ * (same defaults as doPost). Run from Apps Script ▶ after imports or legacy rows.
+ */
+function repairBlankVoteColumnsJthroughM() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MAIN_SHEET_NAME) || SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var lr = sheet.getLastRow();
+  if (lr < 2) {
+    return;
+  }
+  ensureHeaders(sheet);
+  var numRows = lr - 1;
+  var data = sheet.getRange(2, 1, numRows, 13).getValues();
+  var fixed = 0;
+  for (var i = 0; i < data.length; i++) {
+    var r = i + 2;
+    var jv = String(data[i][9] === null || data[i][9] === undefined ? "" : data[i][9]).trim();
+    var kv = String(data[i][10] === null || data[i][10] === undefined ? "" : data[i][10]).trim();
+    var lv = String(data[i][11] === null || data[i][11] === undefined ? "" : data[i][11]).trim();
+    var mv = String(data[i][12] === null || data[i][12] === undefined ? "" : data[i][12]).trim();
+    if (!jv) {
+      sheet.getRange(r, 10).setValue("Not Voted");
+      fixed++;
+    }
+    if (!kv) {
+      sheet.getRange(r, 11).setValue("Not Voted");
+      fixed++;
+    }
+    if (!lv) {
+      sheet.getRange(r, 12).setValue("Others");
+      fixed++;
+    }
+    if (!mv) {
+      sheet.getRange(r, 13).setValue("Others");
+      fixed++;
+    }
+  }
+  if (fixed > 0) {
+    try {
+      recalcGevsveAndFinalValues();
+    } catch (e) {
+      Logger.log("repairBlankVoteColumnsJthroughM: recalc failed " + e);
+    }
+  }
+  Logger.log("repairBlankVoteColumnsJthroughM: filled " + fixed + " empty cells (J–M).");
 }
 
 function recalcAllNormalizedScores() {

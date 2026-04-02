@@ -8,16 +8,8 @@ import {
   winOptions,
   GOOGLE_SCRIPT_URL,
 } from "../data/surveyData";
-import { formatAcSelectLabel, sortConstituenciesByName } from "../data/acNumbers";
+import { getWeights } from "../data/demographicWeights";
 import "./SurveyForm.css";
-
-/** Wall clock in Asia/Kolkata as `yyyy-mm-dd HH:mm:ss` — unambiguous for Apps Script date filters (avoids en-IN 1/4/2026 vs 4/1/2026). */
-function timestampKolkata() {
-  return new Date().toLocaleString("sv-SE", {
-    timeZone: "Asia/Kolkata",
-    hour12: false,
-  });
-}
 
 const initialForm = {
   ac: "",
@@ -52,54 +44,16 @@ export default function SurveyForm() {
   const [attempted, setAttempted] = useState(false);
   const formRef = useRef();
 
-  // Normalize AC names to avoid FA dropdown missing due to spelling variants
-  // (e.g., tracker CSV uses "Kazhakootam" while form list uses "Kazhakkoottam").
-  const normalizeAcKey = (v) =>
-    String(v || "")
-      .toLowerCase()
-      .replace(/[\u200B-\u200D\uFEFF]/g, "")
-      .replace(/\(sc\)/g, "")
-      .replace(/ac/g, "")
-      .replace(/[^a-z]/g, "");
-
-  const CANONICAL_AC_ALIAS = {
-    kazhakootam: "Kazhakkoottam",
-    kazhakkoottam: "Kazhakkoottam",
-    nemom: "Nemom",
-    nemam: "Nemom",
-    nattika: "Nattika",
-    nattikaac: "Nattika",
-    thrissur: "Thrissur",
-    thrissurac: "Thrissur",
-    manalur: "Manalur",
-    manalurac: "Manalur",
-    perumbaavoor: "Perumbavoor",
-    perumbavoor: "Perumbavoor",
-    kanjirapalli: "Kanjirappally",
-    kanjirappally: "Kanjirappally",
-    thripunithura: "Thripunithura",
-    thrippunithura: "Thripunithura",
-    thripunitura: "Thripunithura",
-    thrikkakara: "Thrikkakara",
-  };
-
-  const canonicalizeAc = (name) => {
-    const k = normalizeAcKey(name);
-    return CANONICAL_AC_ALIAS[k] || name;
-  };
-
   // Derived: FA names for selected AC
-  const selectedAC = constituencyData.find((c) => normalizeAcKey(c.ac) === normalizeAcKey(form.ac));
+  const selectedAC = constituencyData.find((c) => c.ac === form.ac);
   const faNames = selectedAC
-    ? [selectedAC.fa1, selectedAC.fa2, selectedAC.fa3, selectedAC.fa4].filter(Boolean)
+    ? [selectedAC.fa1, selectedAC.fa2].filter(Boolean)
     : [];
-  /** ACs in surveyData with no FA rows yet — free-text FA name */
-  const faNameIsText = Boolean(form.ac && selectedAC && faNames.length === 0);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => {
-      const updated = { ...prev, [name]: name === "ac" ? canonicalizeAc(value) : value };
+      const updated = { ...prev, [name]: value };
       if (name === "ac") updated.faName = "";
       return updated;
     });
@@ -147,67 +101,65 @@ export default function SurveyForm() {
 
     setSubmitting(true);
 
-      try {
-        // Send labels only — Google Apps Script resolves weights from AC_DEMOGRAPHICS
-        // so scores stay correct after you update the script (avoids stale cached JS sending 0).
-        const payload = {
-          timestamp: timestampKolkata(),
-          ac: form.ac,
-          faName: form.faName,
-          caste: form.caste,
-          gender: form.gender,
-          age: form.age,
-          vote2021: form.vote2021,
-          vote2024: form.vote2024,
-          vote2026: form.vote2026,
-          whoWillWin: form.whoWillWin,
-        };
-  
-        // Create an AbortController so we can force the UI to stop waiting after 1 second
-        // since we know the Apps Script receives the data and writes it to the sheet instantly
-        // before spending time on the group calculations.
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1000);
-  
-        try {
-          // Changed to text/plain to prevent CORS preflight freezing the Promise
-          await fetch(GOOGLE_SCRIPT_URL, {
-            method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify(payload),
-            signal: controller.signal
-          });
-        } catch (fetchErr) {
-          // In no-cors mode, a timeout or opaque response error is normal and safe to ignore 
-          // because the request was transmitted to the Google server.
-          console.log("Transmission complete (Fetch handoff)", fetchErr);
-        } finally {
-          clearTimeout(timeoutId);
-        }
-  
-        setSuccess(true);
-        setForm(initialForm);
-        setFieldErrors({});
-        setAttempted(false);
-        // Scroll to top so user sees the success message
-        window.scrollTo({ top: 0, behavior: "smooth" });
-        setTimeout(() => setSuccess(false), 5000);
-      } catch (err) {
-        console.error(err);
-        setError(
-          "Submission encountered an issue, but may have saved to Google Sheets."
-        );
-      } finally {
-        setSubmitting(false);
-      }
+    try {
+      // Look up demographic weights
+      const { casteWeight, genderWeight, ageWeight } = getWeights(
+        form.ac,
+        form.caste,
+        form.gender,
+        form.age
+      );
+
+      // Normalized score = caste × gender × age
+      const normalizedScore = casteWeight * genderWeight * ageWeight;
+
+      const payload = {
+        timestamp: new Date().toLocaleString("en-IN", {
+          timeZone: "Asia/Kolkata",
+        }),
+        ac: form.ac,
+        faName: form.faName,
+        caste: casteWeight,         // caste % / 100 (numeric, legacy)
+        casteLabel: form.caste,     // text label: "Muslim", "Nair", etc.
+        gender: genderWeight,       // gender % / 100 (numeric, legacy)
+        genderLabel: form.gender,   // text label: "Male" or "Female"
+        age: ageWeight,             // Age Normal from Sheet2 (numeric, legacy)
+        ageLabel: form.age,         // text label: "30-39", "50-59", etc.
+        vote2021: form.vote2021,
+        vote2024: form.vote2024,
+        vote2026: form.vote2026,
+        whoWillWin: form.whoWillWin,
+        normalizedScore: normalizedScore,  // caste × gender × age
+      };
+
+      await fetch(GOOGLE_SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      setSuccess(true);
+      setForm(initialForm);
+      setFieldErrors({});
+      setAttempted(false);
+      // Scroll to top so user sees the success message
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      setTimeout(() => setSuccess(false), 5000);
+    } catch {
+      setError(
+        "Submission failed. Please check your internet connection and try again."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const hasError = (name) => attempted && fieldErrors[name];
 
   return (
     <div className="survey-wrapper">
-      {/* Accent stripe (navy / blue / sky) */}
+      {/* Decorative tricolor stripe */}
       <div className="tricolor-stripe">
         <span></span><span></span><span></span>
       </div>
@@ -252,12 +204,11 @@ export default function SurveyForm() {
               name="ac"
               value={form.ac}
               onChange={handleChange}
-              aria-label="Assembly constituency, sorted A–Z; each line shows official AC number"
             >
               <option value="">— Select Constituency —</option>
-              {sortConstituenciesByName(constituencyData).map((c) => (
+              {constituencyData.map((c) => (
                 <option key={c.ac} value={c.ac}>
-                  {formatAcSelectLabel(c.ac)}
+                  {c.ac}
                 </option>
               ))}
             </select>
@@ -270,39 +221,24 @@ export default function SurveyForm() {
             <label htmlFor="faName">
               Field Agent (FA) Name <span className="req">*</span>
             </label>
-            {faNameIsText ? (
-              <input
-                type="text"
-                id="faName"
-                name="faName"
-                value={form.faName}
-                onChange={handleChange}
-                placeholder="Enter field assistant name"
-                autoComplete="name"
-                className="survey-text-input"
-              />
-            ) : (
-              <select
-                id="faName"
-                name="faName"
-                value={form.faName}
-                onChange={handleChange}
-                disabled={!form.ac}
-              >
-                <option value="">
-                  {form.ac ? "— Select FA Name —" : "— Select AC first —"}
+            <select
+              id="faName"
+              name="faName"
+              value={form.faName}
+              onChange={handleChange}
+              disabled={!form.ac}
+            >
+              <option value="">
+                {form.ac ? "— Select FA Name —" : "— Select AC first —"}
+              </option>
+              {faNames.map((name) => (
+                <option key={name} value={name}>
+                  {name}
                 </option>
-                {faNames.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            )}
+              ))}
+            </select>
             {hasError("faName") && (
-              <div className="field-error-text">
-                {faNameIsText ? "Enter the field agent name" : "Select a field agent"}
-              </div>
+              <div className="field-error-text">Select a field agent</div>
             )}
           </div>
         </div>

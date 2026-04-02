@@ -1,20 +1,12 @@
-/* ===== Kerala Survey 2026 — Blue theme (aligned with admin dashboard) ===== */
-
-:root {
-  --sf-navy: #00236f;
-  --sf-blue: #1e3a8a;
-  --sf-blue-mid: #2563eb;
-  --sf-sky: #64a8fe;
-  --sf-border: rgba(30, 58, 138, 0.22);
-  --sf-border-soft: rgba(30, 58, 138, 0.14);
-  --sf-ring: rgba(37, 99, 235, 0.22);
-  --sf-shadow: rgba(30, 58, 138, 0.18);
-}
+/* ===== Kerala Survey 2026 — Indian Tricolor Watercolor Theme ===== */
 
 .survey-wrapper {
   min-height: 100vh;
   min-height: 100dvh;
-  background: linear-gradient(180deg, #e8edf7 0%, #f0f4fb 40%, #f7f9fb 100%);
+  /* Exact Indian tricolor watercolor background (local copy) */
+  background:
+    url("/bg-tricolor.jpg")
+      center / cover no-repeat;
   background-attachment: scroll;
   font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
   padding: 0 0 env(safe-area-inset-bottom, 20px);
@@ -24,11 +16,12 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Light overlay for readability */
 .survey-wrapper::before {
   content: "";
   position: fixed;
   inset: 0;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.5);
   z-index: 0;
   pointer-events: none;
 }
@@ -38,7 +31,7 @@
   z-index: 1;
 }
 
-/* ---------- Accent stripe (navy / blue / sky — matches admin) ---------- */
+/* ---------- Tricolor stripe ---------- */
 .tricolor-stripe {
   display: flex;
   height: 5px;
@@ -47,20 +40,20 @@
 }
 .tricolor-stripe span:nth-child(1) {
   flex: 1;
-  background: var(--sf-navy);
+  background: #ff9933;
 }
 .tricolor-stripe span:nth-child(2) {
   flex: 1;
-  background: var(--sf-blue);
+  background: #fff;
 }
 .tricolor-stripe span:nth-child(3) {
   flex: 1;
-  background: var(--sf-sky);
+  background: #138808;
 }
 
 /* ---------- Header ---------- */
 .survey-header {
-  background: linear-gradient(135deg, var(--sf-navy) 0%, var(--sf-blue) 45%, var(--sf-blue-mid) 100%);
+  background: linear-gradient(135deg, #ff9933 0%, #e8870e 50%, #138808 100%);
   padding: 14px 16px;
   text-align: center;
   position: sticky;
@@ -128,7 +121,7 @@
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--sf-border-soft);
+  border: 1px solid rgba(255, 153, 51, 0.18);
   border-radius: 14px;
   padding: 16px 14px;
   margin-bottom: 12px;
@@ -144,13 +137,13 @@
   color: #1a202c;
   margin-bottom: 14px;
   padding-bottom: 10px;
-  border-bottom: 1px solid var(--sf-border-soft);
+  border-bottom: 1px solid rgba(255, 153, 51, 0.15);
 }
 
 .section-number {
   width: 26px;
   height: 26px;
-  background: linear-gradient(135deg, var(--sf-blue), var(--sf-blue-mid));
+  background: linear-gradient(135deg, #ff9933, #e8870e);
   border-radius: 7px;
   display: flex;
   align-items: center;
@@ -190,7 +183,7 @@
   font-size: 16px;
   padding: 12px 36px 12px 12px;
   border-radius: 10px;
-  border: 1.5px solid var(--sf-border);
+  border: 1.5px solid rgba(19, 136, 8, 0.22);
   background-color: rgba(255, 255, 255, 0.9);
   color: #2d3748;
   appearance: none;
@@ -212,36 +205,14 @@
 
 .field-group select:focus,
 .question-card select:focus {
-  border-color: var(--sf-blue-mid);
-  box-shadow: 0 0 0 3px var(--sf-ring);
+  border-color: #ff9933;
+  box-shadow: 0 0 0 3px rgba(255, 153, 51, 0.15);
 }
 
 .field-group select:disabled {
   opacity: 0.4;
   cursor: not-allowed;
   background-color: rgba(240, 240, 240, 0.7);
-}
-
-.field-group .survey-text-input {
-  width: 100%;
-  font-size: 16px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  border: 1.5px solid var(--sf-border);
-  background-color: rgba(255, 255, 255, 0.9);
-  color: #2d3748;
-  min-height: 48px;
-  box-sizing: border-box;
-  font-family: inherit;
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-.field-group .survey-text-input:focus {
-  border-color: var(--sf-blue-mid);
-  box-shadow: 0 0 0 3px var(--sf-ring);
-}
-.field-group .survey-text-input::placeholder {
-  color: #a0aec0;
 }
 
 .field-row {
@@ -253,7 +224,7 @@
 /* ---------- Question Cards ---------- */
 .question-card {
   background: rgba(255, 255, 255, 0.55);
-  border: 1px solid var(--sf-border-soft);
+  border: 1px solid rgba(19, 136, 8, 0.08);
   border-radius: 10px;
   padding: 12px;
   margin-bottom: 10px;
@@ -276,7 +247,7 @@
 
 .q-num {
   display: inline-block;
-  background: linear-gradient(135deg, var(--sf-blue), var(--sf-blue-mid));
+  background: linear-gradient(135deg, #ff9933, #e8870e);
   color: #fff;
   font-size: 11px;
   font-weight: 800;
@@ -303,9 +274,9 @@
 }
 
 .success-msg {
-  background: rgba(30, 58, 138, 0.08);
-  color: var(--sf-blue);
-  border: 1px solid var(--sf-border-soft);
+  background: rgba(19, 136, 8, 0.1);
+  color: #138808;
+  border: 1px solid rgba(19, 136, 8, 0.2);
 }
 
 /* ---------- Success Popup Overlay ---------- */
@@ -343,7 +314,7 @@
 .popup-title {
   font-size: 20px;
   font-weight: 800;
-  color: var(--sf-blue);
+  color: #138808;
   margin: 0 0 8px;
 }
 
@@ -355,7 +326,7 @@
 }
 
 .popup-btn {
-  background: linear-gradient(135deg, var(--sf-blue) 0%, var(--sf-blue-mid) 100%);
+  background: linear-gradient(135deg, #ff9933 0%, #138808 100%);
   color: #fff;
   border: none;
   border-radius: 12px;
@@ -368,7 +339,7 @@
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   transition: transform 0.15s, box-shadow 0.2s;
-  box-shadow: 0 4px 14px var(--sf-shadow);
+  box-shadow: 0 4px 14px rgba(255, 153, 51, 0.3);
 }
 
 .popup-btn:active {
@@ -398,7 +369,7 @@
   font-size: 16px;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, var(--sf-blue) 0%, var(--sf-blue-mid) 100%);
+  background: linear-gradient(135deg, #ff9933 0%, #138808 100%);
   border: none;
   border-radius: 12px;
   cursor: pointer;
@@ -407,7 +378,7 @@
   justify-content: center;
   gap: 8px;
   transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
-  box-shadow: 0 4px 14px var(--sf-shadow);
+  box-shadow: 0 4px 14px rgba(255, 153, 51, 0.3);
   font-family: inherit;
   letter-spacing: 0.3px;
   min-height: 54px;
@@ -417,12 +388,12 @@
 
 .submit-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(30, 58, 138, 0.28);
+  box-shadow: 0 6px 20px rgba(255, 153, 51, 0.4);
 }
 
 .submit-btn:active:not(:disabled) {
   transform: scale(0.98);
-  box-shadow: 0 2px 8px var(--sf-shadow);
+  box-shadow: 0 2px 8px rgba(255, 153, 51, 0.3);
 }
 
 .submit-btn:disabled {
@@ -454,7 +425,6 @@
 
 /* ---------- Per-field Validation Errors ---------- */
 .field-group.has-error select,
-.field-group.has-error .survey-text-input,
 .question-card.has-error select {
   border-color: #e53e3e;
   box-shadow: 0 0 0 2px rgba(229, 62, 62, 0.15);
