@@ -85,7 +85,7 @@ function rowMatchesDateFilter(tsCell, dateStr) {
   return legacySubstringRowMatch(tsCell, dateStr);
 }
 
-function mapRowsToEntries(filtered, displayTimestamps) {
+function mapRowsToEntries(filtered, displayTimestamps, rowNumbers) {
   var headers = [
     "timestamp","ac","faName",
     "casteWeight","casteLabel",
@@ -105,6 +105,10 @@ function mapRowsToEntries(filtered, displayTimestamps) {
     if (displayTimestamps && displayTimestamps[idx] !== undefined && displayTimestamps[idx] !== null && String(displayTimestamps[idx]).trim() !== "") {
       obj.timestamp = displayTimestamps[idx];
     }
+    // Sheet row number (row 2 = first data row, so sheetRow = originalIndex + 2)
+    if (rowNumbers && rowNumbers[idx] !== undefined) {
+      obj.sheetRow = rowNumbers[idx];
+    }
     return obj;
   });
 }
@@ -120,15 +124,17 @@ function getEntriesForDate(dateStr) {
   var displayA = sheet.getRange(2, 1, numRows, 1).getDisplayValues();
   var filtered = [];
   var dispTs = [];
+  var rowNums = [];
   var i;
   for (i = 0; i < numRows; i++) {
     var tsF = timestampForDateFilter(displayA[i][0], data[i][0]);
     if (!dateStr || rowMatchesDateFilter(tsF, dateStr)) {
       filtered.push(data[i]);
       dispTs.push(displayA[i][0]);
+      rowNums.push(i + 2); // +2: row 1 is header, data starts at row 2
     }
   }
-  var entries = mapRowsToEntries(filtered, dispTs);
+  var entries = mapRowsToEntries(filtered, dispTs, rowNums);
   return { entries: entries, total: entries.length };
 }
 
@@ -143,6 +149,7 @@ function getEntriesForDateRange(fromYmd, toYmd) {
   var displayA = sheet.getRange(2, 1, numRows, 1).getDisplayValues();
   var filtered = [];
   var dispTs = [];
+  var rowNums = [];
   for (var j = 0; j < numRows; j++) {
     var tsF = timestampForDateFilter(displayA[j][0], data[j][0]);
     var rowYmd = cellToYmdKolkata(tsF);
@@ -155,10 +162,11 @@ function getEntriesForDateRange(fromYmd, toYmd) {
     if (include) {
       filtered.push(data[j]);
       dispTs.push(displayA[j][0]);
+      rowNums.push(j + 2); // +2: row 1 is header
     }
   }
 
-  var entries = mapRowsToEntries(filtered, dispTs);
+  var entries = mapRowsToEntries(filtered, dispTs, rowNums);
   return { entries: entries, total: entries.length };
 }
 
