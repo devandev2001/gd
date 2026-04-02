@@ -110,6 +110,15 @@ export const acDemographics = {
     male: 49.14, female: 50.85,
     Muslim: 18.6, Christian: 35.5, Nair: 12.39, Ezhava: 12.39, Others: 11.04, "SC/ST": 10.07,
   },
+  Thripunithura: {
+    male: 48.32, female: 51.68,
+    Muslim: 11.82, Christian: 26.31, Nair: 11.08, Ezhava: 21.55, Others: 20.95, "SC/ST": 7.99,
+  },
+  /** Caste shares TBD in FINAL GENDER CASTE; gender from Male female CSV — caste % proxied from Thripunithura until split exists. */
+  Thrikkakara: {
+    male: 48.06, female: 51.94,
+    Muslim: 11.82, Christian: 26.31, Nair: 11.08, Ezhava: 21.55, Others: 20.95, "SC/ST": 7.99,
+  },
 };
 
 const AC_ALIASES = {
@@ -126,6 +135,9 @@ const AC_ALIASES = {
   manalurac: "Manalur",
   perumbaavoor: "Perumbavoor",
   perumbavoor: "Perumbavoor",
+  thripunitura: "Thripunithura",
+  thrippunithura: "Thripunithura",
+  thrikakkara: "Thrikkakara",
 };
 
 const CANONICAL_AC_BY_KEY = Object.keys(acDemographics).reduce((acc, ac) => {

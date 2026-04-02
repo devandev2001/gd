@@ -1,11 +1,21 @@
 /**
- * Kerala Survey 2026 — DYNAMIC MATCHING EXCEL FORMULA SCRIPT
+ * Kerala Survey 2026 — survey weights aligned with scripts/weight_ground_input.py
  *
- * Implements the "Shared Power" model: when a new entry is added, 
- * the GevsVE (Column O) updates for all existing rows in that group.
+ * Caste / Gender / Age: raking weight = population target ÷ sample share within each AC
+ *   (targets from FINAL GENDER CASTE sheet + AGE_WEIGHTS).
+ * GevsVE (column O): seven ACs only — historical vote share as fraction ÷ (party count / n_ac);
+ *   Kasaragod & Nemom use Vote 2024 GE (K); others use Vote 2021 AE (J). Others = 1 − LDF − UDF − BJP.
+ * On append: all rows in that AC get new D–H and N; then O and P (P = O × N).
  */
 
 var MAIN_SHEET_NAME = "Sheet1";
+
+/** Short-lived cache for entries API (reduces repeat loads; TTL keeps new submissions visible quickly). */
+var ENTRIES_CACHE_TTL_SEC = 45;
+var ENTRIES_CACHE_MAX_CHARS = 95000;
+/** Short-lived cache for entries API (reduces repeat dashboard hits). Max ~100KB per CacheService entry. */
+var ENTRIES_CACHE_TTL_SEC = 60;
+var ENTRIES_CACHE_MAX_CHARS = 95000;
 var DEMOGRAPHICS_SHEET_NAME = "FINAL GENDER CASTE";
 var USE_DEMOGRAPHICS_SHEET = true;
 
@@ -201,7 +211,9 @@ var AC_FA_ROSTER = {
   "Malampuzha": ["Jayakrishnan", "Adeep das"],
   "Manalur": ["Sooraj Krishna", "SANJAY"],
   "Perumbavoor": ["Sarath Sadan", "JithuKrishanan Babu"],
-  "Kanjirappally": ["Gokul PG", "Harikrishnan AB"]
+  "Kanjirappally": ["Gokul PG", "Harikrishnan AB"],
+  "Thripunithura": ["FA1", "FA2"],
+  "Thrikkakara": ["FA1", "FA2"]
 };
 
 var _DEMOGRAPHICS_CACHE = null;
@@ -239,7 +251,16 @@ function isTextLabel(val) {
 }
 
 function normalizeAgeLabel(label) {
-  return String(label || "").trim().replace(/[–—]/g, "-");
+  var s = String(label || "").trim().replace(/[–—]/g, "-");
+  if (/^18\s*-\s*19$/i.test(s)) {
+    return "18-19";
+  }
+  return s;
+}
+
+/** Age key for weight tables (matches weight_ground_input.normalize_age_label). */
+function normalizeAgeLabelForWeight(label) {
+  return normalizeAgeLabel(label);
 }
 
 function canonicalCasteKey(casteStr) {
@@ -286,6 +307,8 @@ function normalizeAcName(acRaw) {
   var k = s.toLowerCase().replace(/\s+/g, " ");
   
   if (k === "kattakada") return "Kattakkada";
+  if (k === "thripunitura" || k === "thrippunithura") return "Thripunithura";
+  if (k === "thrikakkara") return "Thrikkakara";
   if (k === "kowalam") return "Kovalam";
   if (k === "trivandrum") return "Thiruvananthapuram";
   if (k === "naimam" || k === "nemam" || k === "nemeom" || k === "naiyamam" || k === "neyyattinkara") return "Nemom";
@@ -341,6 +364,154 @@ function normalizeParty(p) {
     return "BJP/NDA";
   }
   return "Others";
+}
+
+/**
+ * Vote normalization for GevsVE — matches scripts/weight_ground_input.normalize_party.
+ * Empty → ""; Not Voted; LDF/UDF/BJP/NDA; explicit Others; else raw trimmed (unknown → weight 1).
+ */
+function normalizeVoteForGevs(raw) {
+  var s = String(raw === null || raw === undefined ? "" : raw).trim();
+  if (!s || s.toLowerCase() === "nan") {
+    return "";
+  }
+  var u = s.toUpperCase().replace(/\s+/g, "");
+  if (u.indexOf("NOT") >= 0 && u.indexOf("VOT") >= 0) {
+    return "Not Voted";
+  }
+  if (u === "LDF") {
+    return "LDF";
+  }
+  if (u === "UDF") {
+    return "UDF";
+  }
+  if (u === "BJP/NDA" || u === "BJP-NDA" || u === "BJPNDA" || u === "BJP" || u === "NDA") {
+    return "BJP/NDA";
+  }
+  if (u === "OTHERS" || u === "OTHER") {
+    return "Others";
+  }
+  return s;
+}
+
+/** Column J vs K for historical GevsVE (Kasaragod & Nemom use 2024 GE). */
+function getVoteRawForGevs(ac, jRaw, kRaw) {
+  var B = normalizeAcName(ac);
+  if (B === "Kasaragod" || B === "Nemom") {
+    return kRaw;
+  }
+  return jRaw;
+}
+
+/** Historical vote % for seven ACs (same numbers as weight_ground_input.py). */
+function getGevsHistoricalPercents(ac) {
+  var B = normalizeAcName(ac);
+  if (B === "Chathannoor") {
+    return { ldf: 43.12, udf: 24.93, bjp: 30.61 };
+  }
+  if (B === "Attingal") {
+    return { ldf: 47.35, udf: 25.02, bjp: 25.92 };
+  }
+  if (B === "Kattakkada") {
+    return { ldf: 45.49, udf: 29.55, bjp: 23.77 };
+  }
+  if (B === "Manjeshwaram") {
+    return { ldf: 23.57, udf: 38.14, bjp: 37.7 };
+  }
+  if (B === "Poonjar") {
+    return { ldf: 41.94, udf: 24.76, bjp: 29.92 };
+  }
+  if (B === "Kasaragod") {
+    return { ldf: 17.67, udf: 49.57, bjp: 31.76 };
+  }
+  if (B === "Nemom") {
+    return { ldf: 24.59, udf: 28.85, bjp: 45.18 };
+  }
+  return null;
+}
+
+function percentsToGevsFractions(p) {
+  var ldf = p.ldf / 100;
+  var udf = p.udf / 100;
+  var bjp = p.bjp / 100;
+  var oth = Math.max(0, 1 - ldf - udf - bjp);
+  return { ldf: ldf, udf: udf, bjp: bjp, oth: oth };
+}
+
+function isGevsSevenAc(ac) {
+  return getGevsHistoricalPercents(ac) !== null;
+}
+
+/**
+ * Target fraction for party (LDF/UDF/BJP/NDA/Others). Others = 1 - LDF - UDF - BJP.
+ */
+function getGevsTargetFractionForParty(ac, party) {
+  var p = getGevsHistoricalPercents(ac);
+  if (!p) {
+    return null;
+  }
+  var f = percentsToGevsFractions(p);
+  if (party === "LDF") {
+    return f.ldf;
+  }
+  if (party === "UDF") {
+    return f.udf;
+  }
+  if (party === "BJP/NDA") {
+    return f.bjp;
+  }
+  if (party === "Others") {
+    return f.oth;
+  }
+  return null;
+}
+
+/**
+ * GevsVE = target_fraction / (count_party / n_ac); matches weight_ground_input.compute_weights.
+ */
+function computeGevsVE(ac, jRaw, kRaw, partyCountMap, nAc, emptyKey) {
+  var acN = normalizeAcName(ac);
+  if (!isGevsSevenAc(acN) || nAc <= 0) {
+    return 1;
+  }
+  var party = normalizeVoteForGevs(getVoteRawForGevs(acN, jRaw, kRaw));
+  if (party === "" || party === "Not Voted") {
+    return 1;
+  }
+  var t = getGevsTargetFractionForParty(acN, party);
+  if (t === null || !isFinite(t) || t <= 0) {
+    return 1;
+  }
+  var key = party === "" ? emptyKey : party;
+  var cnt = partyCountMap[key];
+  if (cnt === undefined || cnt === null) {
+    cnt = 0;
+  }
+  var sample = cnt / nAc;
+  if (!isFinite(sample) || sample <= 0) {
+    return 1;
+  }
+  var r = t / sample;
+  if (!isFinite(r) || r <= 0) {
+    return 1;
+  }
+  return r;
+}
+
+/** weight = target / (bin_count / n_ac) — same as Python. */
+function computeRakingWeight(targetFrac, binCount, nAc) {
+  if (!isFinite(targetFrac) || targetFrac <= 0 || !nAc || nAc <= 0) {
+    return 1;
+  }
+  var sample = binCount / nAc;
+  if (!isFinite(sample) || sample <= 0) {
+    return 1;
+  }
+  var w = targetFrac / sample;
+  if (!isFinite(w) || w <= 0) {
+    return 1;
+  }
+  return w;
 }
 
 function voteForSheet(v) {
@@ -506,52 +677,87 @@ function getAgeWeightFromAny(ageVal) {
   return 0;
 }
 
-function resolveWeights(ac, casteVal, genderVal, ageVal) {
+/**
+ * Raking weights: target_pop_share / sample_share within AC (matches weight_ground_input.compute_weights).
+ * Pass nAc and stratum counts for (caste & gender & age) for this row's AC.
+ */
+function resolveWeightsFromLabelsAndCounts(ac, casteLabel, genderLabel, ageLabel, nAc, casteCount, genderCount, ageCount) {
   var acName = normalizeAcName(ac);
   var dem = getDemographicsMap();
   var acData = dem[acName];
 
-  var casteW = 0;
-  var genderW = 0;
-  var ageW = 0;
+  var ck = canonicalCasteKey(casteLabel);
+  var targetC = (acData && acData[ck] !== undefined && acData[ck] !== null) ? acData[ck] / 100 : NaN;
+  var casteW = computeRakingWeight(targetC, casteCount, nAc);
 
-  if (isTextLabel(casteVal)) {
-    var ck = canonicalCasteKey(casteVal);
-    if (acData && acData[ck]) {
-      casteW = acData[ck] / 100;
-    }
-  } else {
-    casteW = asFiniteNumber(casteVal, 0);
-    if (casteW > 1.5) {
-      casteW = casteW / 100;
+  var g = String(genderLabel || "").trim().toLowerCase();
+  var targetG = NaN;
+  if (acData) {
+    if (g === "male") {
+      targetG = acData.male / 100;
+    } else if (g === "female") {
+      targetG = acData.female / 100;
     }
   }
+  var genderW = computeRakingWeight(targetG, genderCount, nAc);
 
-  if (isTextLabel(genderVal)) {
-    var g = String(genderVal).trim().toLowerCase();
-    if (acData) {
-      if (g === "male") {
-        genderW = acData.male / 100;
-      } else {
-        genderW = acData.female / 100;
-      }
-    }
-  } else {
-    genderW = asFiniteNumber(genderVal, 0);
-    if (genderW > 1.5) {
-      genderW = genderW / 100;
-    }
-  }
+  var ageKey = normalizeAgeLabelForWeight(ageLabel);
+  var targetA = AGE_WEIGHTS.hasOwnProperty(ageKey) ? AGE_WEIGHTS[ageKey] : NaN;
+  var ageW = computeRakingWeight(targetA, ageCount, nAc);
 
-  ageW = getAgeWeightFromAny(ageVal);
   var norm = casteW * genderW * ageW;
-
-  return { 
-    casteW: casteW, 
-    genderW: genderW, 
-    ageW: ageW, 
-    norm: norm 
+  return {
+    casteW: casteW,
+    genderW: genderW,
+    ageW: ageW,
+    norm: norm
   };
+}
+
+/**
+ * Legacy entry point: when counts unknown, uses nAc=1 so weight = target; fastRecalcDemographicWeightsAfterAppend fixes.
+ */
+function resolveWeights(ac, casteVal, genderVal, ageVal) {
+  var acName = normalizeAcName(ac);
+
+  var cLab = "";
+  if (isValidCasteLabel(casteVal)) {
+    cLab = canonicalCasteKey(casteVal);
+  } else if (isTextLabel(casteVal)) {
+    cLab = canonicalCasteKey(casteVal);
+  } else {
+    cLab = getCasteLabelFromWeight(acName, casteVal);
+  }
+
+  var gLab = "";
+  if (isValidGenderLabel(genderVal)) {
+    gLab = displayGenderLabel(genderVal);
+  } else if (isTextLabel(genderVal)) {
+    gLab = displayGenderLabel(genderVal);
+  } else {
+    gLab = getGenderLabelFromWeight(acName, genderVal);
+  }
+
+  var aLab = "20-29";
+  if (ageVal != null && isValidAgeLabel(ageVal)) {
+    aLab = normalizeAgeLabel(ageVal);
+  } else if (!isTextLabel(ageVal)) {
+    aLab = getAgeLabelFromAny(ageVal);
+  } else {
+    aLab = normalizeAgeLabel(ageVal);
+  }
+
+  if (!cLab || cLab === "Unknown") {
+    cLab = "Others";
+  }
+  if (!gLab || gLab === "Unknown") {
+    gLab = "Male";
+  }
+  if (!aLab || aLab === "Unknown" || !AGE_WEIGHTS.hasOwnProperty(normalizeAgeLabelForWeight(aLab))) {
+    aLab = "20-29";
+  }
+
+  return resolveWeightsFromLabelsAndCounts(acName, cLab, gLab, aLab, 1, 1, 1, 1);
 }
 
 function casteLabelForSheet(ac, formCaste, casteW) {
@@ -658,211 +864,267 @@ function getAgeLabelFromWeight(ageWeight) {
 
 
 /* =========================================================================
-   PERFECT EXCEL REPLICA 
-   This perfectly recreates your exact IF/OR/SWITCH formula logic line by line.
+   GevsVE + raking weights — aligned with scripts/weight_ground_input.py
+   GevsVE = target_fraction / (party_count / n_ac); seven ACs only.
    ========================================================================= */
 
-function executeExcelFormulaForO(acName, vote2021, vote2024, countColK_UDF, countColK_LDF, countColK_BJP, countColJ_UDF, countColJ_LDF, countColJ_BJP) {
-  // Translate standard variables from Row directly into formula equivalents
-  var B2 = normalizeAcName(acName);       // Column B
-  var J2 = normalizeParty(vote2021);      // Column J
-  var K2 = normalizeParty(vote2024);      // Column K
-  
-  // IF(OR(B2="Kasaragod", B2="Nemom")
-  if (B2 === "Kasaragod" || B2 === "Nemom") {
-    
-    // SWITCH(K2...
-    if (K2 === "UDF") {
-      // SWITCH(B2, "Kasaragod", 49.57, "Nemom", 28.85) / COUNTIFS($B:$B, B2, $K:$K, "UDF")
-      var base = (B2 === "Kasaragod") ? 49.57 : 28.85;
-      return base / Math.max(1, countColK_UDF);
-    } 
-    else if (K2 === "LDF") {
-      // SWITCH(B2, "Kasaragod", 17.67, "Nemom", 24.59) / COUNTIFS($B:$B, B2, $K:$K, "LDF")
-      var base = (B2 === "Kasaragod") ? 17.67 : 24.59;
-      return base / Math.max(1, countColK_LDF);
-    } 
-    else if (K2 === "BJP/NDA") {
-      // SWITCH(B2, "Kasaragod", 31.76, "Nemom", 45.18) / COUNTIFS($B:$B, B2, $K:$K, "BJP/NDA")
-      var base = (B2 === "Kasaragod") ? 31.76 : 45.18;
-      return base / Math.max(1, countColK_BJP);
-    } 
-    else {
-      // 1)
-      return 1;
-    }
-  } 
-  
-  // IF(OR(B2="Chathannoor", B2="Attingal", B2="Kattakkada", B2="Manjeshwaram", B2="Poonjar")
-  else if (B2 === "Chathannoor" || B2 === "Attingal" || B2 === "Kattakkada" || B2 === "Manjeshwaram" || B2 === "Poonjar") {
-    
-    // SWITCH(J2...
-    if (J2 === "UDF") {
-      // SWITCH(B2, "Chathannoor", 24.93, "Attingal", 25.02, "Kattakkada", 29.55, "Manjeshwaram", 38.14, "Poonjar", 24.76) / COUNTIFS($B:$B, B2, $J:$J, "UDF")
-      var baseUDF = 1;
-      if (B2 === "Chathannoor") baseUDF = 24.93;
-      if (B2 === "Attingal") baseUDF = 25.02;
-      if (B2 === "Kattakkada") baseUDF = 29.55;
-      if (B2 === "Manjeshwaram") baseUDF = 38.14;
-      if (B2 === "Poonjar") baseUDF = 24.76;
-      return baseUDF / Math.max(1, countColJ_UDF);
-    }
-    else if (J2 === "LDF") {
-      // SWITCH(...) / COUNTIFS($B:$B, B2, $J:$J, "LDF")
-      var baseLDF = 1;
-      if (B2 === "Chathannoor") baseLDF = 43.12;
-      if (B2 === "Attingal") baseLDF = 47.35;
-      if (B2 === "Kattakkada") baseLDF = 45.49;
-      if (B2 === "Manjeshwaram") baseLDF = 23.57;
-      if (B2 === "Poonjar") baseLDF = 41.94;
-      return baseLDF / Math.max(1, countColJ_LDF);
-    }
-    else if (J2 === "BJP/NDA") {
-      // SWITCH(...) / COUNTIFS($B:$B, B2, $J:$J, "BJP/NDA")
-      var baseBJP = 1;
-      if (B2 === "Chathannoor") baseBJP = 30.61;
-      if (B2 === "Attingal") baseBJP = 25.92;
-      if (B2 === "Kattakkada") baseBJP = 23.77;
-      if (B2 === "Manjeshwaram") baseBJP = 37.7;
-      if (B2 === "Poonjar") baseBJP = 29.92;
-      return baseBJP / Math.max(1, countColJ_BJP);
-    }
-    else {
-      // 1)
-      return 1;
-    }
-  } 
-  
-  // 1)), 1) -> IFERROR Fallback / Logic Fallback
-  else {
-    return 1;
+var GEVS_EMPTY_PARTY_KEY = "__empty__";
+
+/**
+ * Recompute D,F,H,N (raking) for every row in the same AC as the last appended row.
+ */
+function fastRecalcDemographicWeightsAfterAppend(sheet, lastRow) {
+  if (lastRow < 2) {
+    return;
   }
+  var numRows = lastRow - 1;
+  var block = sheet.getRange(2, 2, lastRow, 9).getValues();
+  var lastIdx = numRows - 1;
+  var acNew = normalizeAcName(block[lastIdx][0]);
+
+  var casteCounts = {};
+  var genderCounts = {};
+  var ageCounts = {};
+  var nAc = 0;
+  var i;
+  for (i = 0; i < numRows; i++) {
+    if (normalizeAcName(block[i][0]) !== acNew) {
+      continue;
+    }
+    nAc++;
+    var cLab = canonicalCasteKey(block[i][3]);
+    var gLab = String(block[i][5] || "").trim();
+    var gKey = gLab.toLowerCase() === "male" ? "Male" : (gLab.toLowerCase() === "female" ? "Female" : gLab);
+    var ageKey = normalizeAgeLabelForWeight(block[i][7]);
+    if (!AGE_WEIGHTS.hasOwnProperty(ageKey)) {
+      ageKey = "20-29";
+    }
+    casteCounts[cLab] = (casteCounts[cLab] || 0) + 1;
+    genderCounts[gKey] = (genderCounts[gKey] || 0) + 1;
+    ageCounts[ageKey] = (ageCounts[ageKey] || 0) + 1;
+  }
+  if (nAc === 0) {
+    return;
+  }
+
+  var dVals = sheet.getRange(2, 4, lastRow, 4).getValues();
+  var fVals = sheet.getRange(2, 6, lastRow, 6).getValues();
+  var hVals = sheet.getRange(2, 8, lastRow, 8).getValues();
+  var nVals = sheet.getRange(2, 14, lastRow, 14).getValues();
+
+  for (i = 0; i < numRows; i++) {
+    if (normalizeAcName(block[i][0]) !== acNew) {
+      continue;
+    }
+    var cLab2 = canonicalCasteKey(block[i][3]);
+    var gLab2 = String(block[i][5] || "").trim();
+    var gKey2 = gLab2.toLowerCase() === "male" ? "Male" : (gLab2.toLowerCase() === "female" ? "Female" : gLab2);
+    var ageKey2 = normalizeAgeLabelForWeight(block[i][7]);
+    if (!AGE_WEIGHTS.hasOwnProperty(ageKey2)) {
+      ageKey2 = "20-29";
+    }
+    var w = resolveWeightsFromLabelsAndCounts(
+      acNew,
+      cLab2,
+      gKey2,
+      ageKey2,
+      nAc,
+      casteCounts[cLab2] || 1,
+      genderCounts[gKey2] || 1,
+      ageCounts[ageKey2] || 1
+    );
+    dVals[i][0] = w.casteW;
+    fVals[i][0] = w.genderW;
+    hVals[i][0] = w.ageW;
+    nVals[i][0] = w.norm;
+  }
+
+  sheet.getRange(2, 4, lastRow, 4).setValues(dVals);
+  sheet.getRange(2, 6, lastRow, 6).setValues(fVals);
+  sheet.getRange(2, 8, lastRow, 8).setValues(hVals);
+  sheet.getRange(2, 14, lastRow, 14).setValues(nVals);
+  sheet.getRange(2, 4, lastRow, 4).setNumberFormat("0.00000000");
+  sheet.getRange(2, 6, lastRow, 6).setNumberFormat("0.00000000");
+  sheet.getRange(2, 8, lastRow, 8).setNumberFormat("0.00000000");
+  sheet.getRange(2, 14, lastRow, 14).setNumberFormat("0.0000000000");
 }
 
-/** 
- * STATIC ENTRY ENGINE: Calculates only for the new row 
+/**
+ * After a new row: all rows in that AC get new O,P (n_ac and party shares changed).
  */
 function fastRecalcGevsveAfterAppend(sheet, lastRow) {
-  if (lastRow < 2) return;
-  
-  var numRows = lastRow - 1;
-  // Performance Optimization: Read only once, and grab only the core columns (1=A to 16=P)
-  var allData = sheet.getRange(2, 1, numRows, 16).getValues();
+  if (lastRow < 2) {
+    return;
+  }
 
-  // Identify the new row's group (the last item in our array)
+  var numRows = lastRow - 1;
+  var allData = sheet.getRange(2, 1, numRows, 16).getValues();
   var lastIdx = numRows - 1;
   var acNew = normalizeAcName(allData[lastIdx][1]);
-  var jNew = normalizeParty(allData[lastIdx][9]);
-  var kNew = normalizeParty(allData[lastIdx][10]);
-  var partyNew = getGroupPartyForAc(acNew, jNew, kNew);
+  var EMPTY = GEVS_EMPTY_PARTY_KEY;
 
-  // 1. Calculate the TOTAL count for this group across history
-  var matchingIndices = [];
-  for (var i = 0; i < numRows; i++) {
-    var acIter = normalizeAcName(allData[i][1]);
-    if (acIter === acNew) {
-      var pIter = getGroupPartyForAc(acIter, normalizeParty(allData[i][9]), normalizeParty(allData[i][10]));
-      if (pIter === partyNew) {
-        matchingIndices.push(i);
-      }
+  var nAc = 0;
+  var partyMap = {};
+  var i;
+  for (i = 0; i < numRows; i++) {
+    if (normalizeAcName(allData[i][1]) !== acNew) {
+      continue;
     }
+    nAc++;
+    var rawV = getVoteRawForGevs(acNew, allData[i][9], allData[i][10]);
+    var p = normalizeVoteForGevs(rawV);
+    var key = p === "" ? EMPTY : p;
+    partyMap[key] = (partyMap[key] || 0) + 1;
+  }
+  if (nAc === 0) {
+    return;
   }
 
-  var totalCount = matchingIndices.length;
-  if (totalCount === 0) return;
-
-  // 2. Map the count to the Excel Formula Helper
-  var counts = { kUDF: 0, kLDF: 0, kBJP: 0, jUDF: 0, jLDF: 0, jBJP: 0 };
-  if (acNew === "Kasaragod" || acNew === "Nemom") {
-    if (partyNew === "UDF") counts.kUDF = totalCount;
-    else if (partyNew === "LDF") counts.kLDF = totalCount;
-    else if (partyNew === "BJP/NDA") counts.kBJP = totalCount;
-  } else {
-    if (partyNew === "UDF") counts.jUDF = totalCount;
-    else if (partyNew === "LDF") counts.jLDF = totalCount;
-    else if (partyNew === "BJP/NDA") counts.jBJP = totalCount;
+  var colOPValues = sheet.getRange(2, 15, numRows, 2).getValues();
+  for (i = 0; i < numRows; i++) {
+    if (normalizeAcName(allData[i][1]) !== acNew) {
+      continue;
+    }
+    var nVal = asFiniteNumber(allData[i][13], 0);
+    var oVal = computeGevsVE(acNew, allData[i][9], allData[i][10], partyMap, nAc, EMPTY);
+    colOPValues[i][0] = oVal;
+    colOPValues[i][1] = oVal * nVal;
   }
 
-  var updatedO = executeExcelFormulaForO(acNew, jNew, kNew, counts.kUDF, counts.kLDF, counts.kBJP, counts.jUDF, counts.jLDF, counts.jBJP);
-
-  // 3. Efficient Batch Write: Only write to the Columns O and P (indices 14 and 15)
-  // Instead of rewriting the whole sheet, we just prepare the update array for columns 15-16
-  var updateRange = sheet.getRange(2, 15, numRows, 2);
-  var colOPValues = updateRange.getValues(); // Initial values for O and P
-
-  for (var m = 0; m < matchingIndices.length; m++) {
-    var idx = matchingIndices[m];
-    var nVal = asFiniteNumber(allData[idx][13], 0);
-    colOPValues[idx][0] = updatedO;
-    colOPValues[idx][1] = updatedO * nVal;
-  }
-
-  updateRange.setValues(colOPValues);
-  updateRange.setNumberFormat("0.0000000000");
+  sheet.getRange(2, 15, numRows, 2).setValues(colOPValues);
+  sheet.getRange(2, 15, numRows, 2).setNumberFormat("0.0000000000");
 }
 
-/** Helper to determine the group party based on AC */
-function getGroupPartyForAc(ac, jParty, kParty) {
-  if (ac === "Kasaragod" || ac === "Nemom") return kParty;
-  if (ac === "Chathannoor" || ac === "Attingal" || ac === "Kattakkada" || ac === "Manjeshwaram" || ac === "Poonjar") return jParty;
-  return "Others";
-}
-
-/** 
- * FULL SHEET STATIC RECALC
- * Also respects EXACT Excel logic if triggered manually over the entire sheet.
- */
+/** Full sheet: O = GevsVE, P = O × N (matches Python batch). */
 function recalcGevsveAndFinalValues() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(MAIN_SHEET_NAME) || ss.getSheets()[0];
   var lr = sheet.getLastRow();
-  if (lr < 2) return;
+  if (lr < 2) {
+    return;
+  }
 
   ensureHeaders(sheet);
 
   var numRows = lr - 1;
   var data = sheet.getRange(2, 1, numRows, 16).getValues();
-  
-  // 1. First Pass: Calculate Global Totals for all groups
-  var groupTotals = {};
-  for (var i = 0; i < numRows; i++) {
+  var EMPTY = GEVS_EMPTY_PARTY_KEY;
+
+  var nByAc = {};
+  var partyByAc = {};
+  var i;
+  for (i = 0; i < numRows; i++) {
     var ac = normalizeAcName(data[i][1]);
-    var p = getGroupPartyForAc(ac, normalizeParty(data[i][9]), normalizeParty(data[i][10]));
-    var key = ac + "||" + p;
-    groupTotals[key] = (groupTotals[key] || 0) + 1;
+    nByAc[ac] = (nByAc[ac] || 0) + 1;
+    var rawV = getVoteRawForGevs(ac, data[i][9], data[i][10]);
+    var party = normalizeVoteForGevs(rawV);
+    var key = party === "" ? EMPTY : party;
+    if (!partyByAc[ac]) {
+      partyByAc[ac] = {};
+    }
+    partyByAc[ac][key] = (partyByAc[ac][key] || 0) + 1;
   }
 
-  // 2. Second Pass: Apply totals to every row
   var out = [];
-  for (var j = 0; j < numRows; j++) {
-    var acJ = normalizeAcName(data[j][1]);
-    var jVal = normalizeParty(data[j][9]);
-    var kVal = normalizeParty(data[j][10]);
-    var nVal = asFiniteNumber(data[j][13], 0);
-    var pJ = getGroupPartyForAc(acJ, jVal, kVal);
-    
-    var keyJ = acJ + "||" + pJ;
-    var total = groupTotals[keyJ] || 1;
-
-    // Direct counts for the formula helper
-    var c = { kUDF: 0, kLDF: 0, kBJP: 0, jUDF: 0, jLDF: 0, jBJP: 0 };
-    if (acJ === "Kasaragod" || acJ === "Nemom") {
-       if (pJ === "UDF") c.kUDF = total;
-       else if (pJ === "LDF") c.kLDF = total;
-       else if (pJ === "BJP/NDA") c.kBJP = total;
-    } else {
-       if (pJ === "UDF") c.jUDF = total;
-       else if (pJ === "LDF") c.jLDF = total;
-       else if (pJ === "BJP/NDA") c.jBJP = total;
-    }
-
-    var oVal = executeExcelFormulaForO(acJ, jVal, kVal, c.kUDF, c.kLDF, c.kBJP, c.jUDF, c.jLDF, c.jBJP);
+  for (i = 0; i < numRows; i++) {
+    var acJ = normalizeAcName(data[i][1]);
+    var nAc = nByAc[acJ] || 1;
+    var pmap = partyByAc[acJ] || {};
+    var nVal = asFiniteNumber(data[i][13], 0);
+    var oVal = computeGevsVE(acJ, data[i][9], data[i][10], pmap, nAc, EMPTY);
     out.push([oVal, oVal * nVal]);
   }
 
   sheet.getRange(2, 15, numRows, 2).setValues(out);
   sheet.getRange(2, 15, numRows, 2).setNumberFormat("0.0000000000");
   SpreadsheetApp.flush();
+}
+
+/**
+ * Full sheet raking: D,F,H,N from demographics sheet + AGE_WEIGHTS (same as Python).
+ * May be slow on very large sheets; use after bulk import or column fixes.
+ */
+function recalcAllDemographicWeightsAndNormalized() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MAIN_SHEET_NAME) || SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var lr = sheet.getLastRow();
+  if (lr < 2) {
+    return;
+  }
+  ensureHeaders(sheet);
+  var numRows = lr - 1;
+  var block = sheet.getRange(2, 2, lr, 9).getValues();
+
+  var nByAc = {};
+  var casteByAc = {};
+  var genderByAc = {};
+  var ageByAc = {};
+  var i;
+  for (i = 0; i < numRows; i++) {
+    var ac = normalizeAcName(block[i][0]);
+    nByAc[ac] = (nByAc[ac] || 0) + 1;
+    var cLab = canonicalCasteKey(block[i][3]);
+    var gLab = String(block[i][5] || "").trim();
+    var gKey = gLab.toLowerCase() === "male" ? "Male" : (gLab.toLowerCase() === "female" ? "Female" : gLab);
+    var ageKey = normalizeAgeLabelForWeight(block[i][7]);
+    if (!AGE_WEIGHTS.hasOwnProperty(ageKey)) {
+      ageKey = "20-29";
+    }
+    if (!casteByAc[ac]) {
+      casteByAc[ac] = {};
+    }
+    if (!genderByAc[ac]) {
+      genderByAc[ac] = {};
+    }
+    if (!ageByAc[ac]) {
+      ageByAc[ac] = {};
+    }
+    casteByAc[ac][cLab] = (casteByAc[ac][cLab] || 0) + 1;
+    genderByAc[ac][gKey] = (genderByAc[ac][gKey] || 0) + 1;
+    ageByAc[ac][ageKey] = (ageByAc[ac][ageKey] || 0) + 1;
+  }
+
+  var dVals = sheet.getRange(2, 4, lr, 4).getValues();
+  var fVals = sheet.getRange(2, 6, lr, 6).getValues();
+  var hVals = sheet.getRange(2, 8, lr, 8).getValues();
+  var nVals = sheet.getRange(2, 14, lr, 14).getValues();
+
+  for (i = 0; i < numRows; i++) {
+    var ac2 = normalizeAcName(block[i][0]);
+    var nA = nByAc[ac2] || 1;
+    var cLab2 = canonicalCasteKey(block[i][3]);
+    var gLab2 = String(block[i][5] || "").trim();
+    var gKey2 = gLab2.toLowerCase() === "male" ? "Male" : (gLab2.toLowerCase() === "female" ? "Female" : gLab2);
+    var ageKey2 = normalizeAgeLabelForWeight(block[i][7]);
+    if (!AGE_WEIGHTS.hasOwnProperty(ageKey2)) {
+      ageKey2 = "20-29";
+    }
+    var cb = casteByAc[ac2] || {};
+    var gb = genderByAc[ac2] || {};
+    var ab = ageByAc[ac2] || {};
+    var w = resolveWeightsFromLabelsAndCounts(
+      ac2,
+      cLab2,
+      gKey2,
+      ageKey2,
+      nA,
+      cb[cLab2] || 1,
+      gb[gKey2] || 1,
+      ab[ageKey2] || 1
+    );
+    dVals[i][0] = w.casteW;
+    fVals[i][0] = w.genderW;
+    hVals[i][0] = w.ageW;
+    nVals[i][0] = w.norm;
+  }
+
+  sheet.getRange(2, 4, lr, 4).setValues(dVals);
+  sheet.getRange(2, 6, lr, 6).setValues(fVals);
+  sheet.getRange(2, 8, lr, 8).setValues(hVals);
+  sheet.getRange(2, 14, lr, 14).setValues(nVals);
+  sheet.getRange(2, 4, lr, 4).setNumberFormat("0.00000000");
+  sheet.getRange(2, 6, lr, 6).setNumberFormat("0.00000000");
+  sheet.getRange(2, 8, lr, 8).setNumberFormat("0.00000000");
+  sheet.getRange(2, 14, lr, 14).setNumberFormat("0.0000000000");
 }
 
 function doPost(e) {
@@ -907,9 +1169,21 @@ function doPost(e) {
     sheet.getRange(lr, 14).setNumberFormat("0.0000000000");
 
     try {
+      fastRecalcDemographicWeightsAfterAppend(sheet, lr);
+    } catch (demErr) {
+      Logger.log("fastRecalcDemographicWeightsAfterAppend failed: " + demErr);
+    }
+
+    try {
       fastRecalcGevsveAfterAppend(sheet, lr);
     } catch (fastErr) {
       Logger.log("fastRecalcGevsveAfterAppend failed: " + fastErr);
+    }
+
+    try {
+      clearEntriesCache();
+    } catch (cacheErr) {
+      Logger.log("clearEntriesCache failed: " + cacheErr);
     }
 
     return jsonResponse({ status: "success", opRecalculated: true });
@@ -924,10 +1198,30 @@ function doGet(e) {
     if (action === "entries") {
       var fromP = e.parameter.from;
       var toP = e.parameter.to;
+      var dateP = e.parameter.date || "";
+      var cache = CacheService.getScriptCache();
+      var cacheKey;
+      var payload;
       if (fromP && toP) {
-        return jsonResponse(getEntriesForDateRange(String(fromP), String(toP)));
+        cacheKey = "ent_v1_r_" + String(fromP) + "_" + String(toP);
+        var cachedR = cache.get(cacheKey);
+        if (cachedR) {
+          return ContentService.createTextOutput(cachedR).setMimeType(ContentService.MimeType.JSON);
+        }
+        payload = getEntriesForDateRange(String(fromP), String(toP));
+      } else {
+        cacheKey = "ent_v1_d_" + (dateP === "" ? "all" : String(dateP));
+        var cachedD = cache.get(cacheKey);
+        if (cachedD) {
+          return ContentService.createTextOutput(cachedD).setMimeType(ContentService.MimeType.JSON);
+        }
+        payload = getEntriesForDate(dateP);
       }
-      return jsonResponse(getEntriesForDate(e.parameter.date || ""));
+      var jsonStr = JSON.stringify(payload);
+      if (jsonStr.length <= ENTRIES_CACHE_MAX_CHARS) {
+        cache.put(cacheKey, jsonStr, ENTRIES_CACHE_TTL_SEC);
+      }
+      return ContentService.createTextOutput(jsonStr).setMimeType(ContentService.MimeType.JSON);
     }
     if (action === "summary") {
       return jsonResponse(getSummaryForDate(e.parameter.date || ""));
@@ -940,8 +1234,9 @@ function doGet(e) {
       return jsonResponse({ status: "ok" });
     }
     if (action === "recalcOP") {
+      recalcAllDemographicWeightsAndNormalized();
       recalcGevsveAndFinalValues();
-      return jsonResponse({ status: "ok", message: "O/P recalculated statically" });
+      return jsonResponse({ status: "ok", message: "D–N and O/P recalculated (raking + GevsVE)" });
     }
     if (action === "ping") {
       pingWarm();
@@ -958,6 +1253,73 @@ function doGet(e) {
 function jsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function entriesCacheKey(suffix) {
+  var gen = PropertiesService.getScriptProperties().getProperty("entriesCacheGen") || "0";
+  return "ent_v1_g" + gen + "_" + suffix;
+}
+
+/** Bump generation so all prior entry-cache keys are ignored (call after sheet changes). */
+function clearEntriesCache() {
+  var p = PropertiesService.getScriptProperties();
+  var g = parseInt(p.getProperty("entriesCacheGen") || "0", 10) + 1;
+  p.setProperty("entriesCacheGen", String(g));
+}
+
+/** Merge sorted 0-based row indices into contiguous ranges for fewer getRange calls. */
+function groupContiguousIndices(sorted) {
+  if (sorted.length === 0) return [];
+  var groups = [];
+  var s = sorted[0];
+  var e = sorted[0];
+  var k;
+  for (k = 1; k < sorted.length; k++) {
+    if (sorted[k] === e + 1) {
+      e = sorted[k];
+    } else {
+      groups.push([s, e]);
+      s = e = sorted[k];
+    }
+  }
+  groups.push([s, e]);
+  return groups;
+}
+
+/**
+ * After filtering by timestamp (column A only), load full 16-column rows only for matching indices.
+ * When most rows are excluded (e.g. one day in a large sheet), this is much faster than reading all columns for every row.
+ */
+function readEntryRowsByIndices(sheet, indices, numRows, displayA) {
+  if (indices.length === 0) {
+    return { rows: [], dispTs: [] };
+  }
+  var sorted = indices.slice().sort(function(a, b) { return a - b; });
+  var allRows = [];
+  var allDisp = [];
+  var i;
+  var j;
+  if (sorted.length === numRows) {
+    var dataAll = sheet.getRange(2, 1, numRows, 16).getValues();
+    for (i = 0; i < numRows; i++) {
+      allRows.push(dataAll[i]);
+      allDisp.push(displayA[i][0]);
+    }
+    return { rows: allRows, dispTs: allDisp };
+  }
+  var groups = groupContiguousIndices(sorted);
+  for (i = 0; i < groups.length; i++) {
+    var s = groups[i][0];
+    var e = groups[i][1];
+    var height = e - s + 1;
+    var sheetRow = 2 + s;
+    var chunk = sheet.getRange(sheetRow, 1, height, 16).getValues();
+    for (j = 0; j < chunk.length; j++) {
+      allRows.push(chunk[j]);
+      allDisp.push(displayA[s + j][0]);
+    }
+  }
+  return { rows: allRows, dispTs: allDisp };
 }
 
 function pingWarm() {
@@ -1293,30 +1655,20 @@ function fixTextRows() {
     var gIn = pickGenderInputForResolve(row);
     var aIn = pickAgeInputForResolve(row);
 
-    var w = resolveWeights(ac, cIn, gIn, aIn);
-
-    var casteLabel = casteLabelForSheet(ac, cIn, w.casteW);
-    var genderLabel = genderLabelForSheet(ac, gIn, w.genderW);
-    var ageLabel = ageLabelForSheet(aIn, w.ageW);
+    var casteLabel = casteLabelForSheet(ac, cIn, row[3]);
+    var genderLabel = genderLabelForSheet(ac, gIn, row[5]);
+    var ageLabel = ageLabelForSheet(aIn, row[7]);
 
     var r = i + 2;
     sheet.getRange(r, 2).setValue(ac);
-    sheet.getRange(r, 4).setValue(w.casteW);
     sheet.getRange(r, 5).setValue(casteLabel);
-    sheet.getRange(r, 6).setValue(w.genderW);
     sheet.getRange(r, 7).setValue(genderLabel);
-    sheet.getRange(r, 8).setValue(w.ageW);
     sheet.getRange(r, 9).setValue(ageLabel);
     sheet.getRange(r, 12).setValue(v26);
     sheet.getRange(r, 13).setValue(ww);
-    sheet.getRange(r, 14).setValue(w.norm);
   }
 
-  sheet.getRange(2, 4, numRows, 1).setNumberFormat("0.00000000");
-  sheet.getRange(2, 6, numRows, 1).setNumberFormat("0.00000000");
-  sheet.getRange(2, 8, numRows, 1).setNumberFormat("0.00000000");
-  sheet.getRange(2, 14, numRows, 1).setNumberFormat("0.0000000000");
-
+  recalcAllDemographicWeightsAndNormalized();
   recalcGevsveAndFinalValues();
   Logger.log("fixTextRows updated " + numRows + " rows.");
 }
@@ -1324,26 +1676,15 @@ function fixTextRows() {
 function recalcAllNormalizedScores() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(MAIN_SHEET_NAME) || SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var lr = sheet.getLastRow();
-  if (lr < 2) { Logger.log("No rows."); return; }
-
-  var numRows = lr - 1;
-  var data = sheet.getRange(2, 1, numRows, 16).getValues();
-  var updated = 0;
-
-  for (var i = 0; i < data.length; i++) {
-    var cIn = pickCasteInputForResolve(data[i]);
-    var gIn = pickGenderInputForResolve(data[i]);
-    var aIn = pickAgeInputForResolve(data[i]);
-    var ac = normalizeAcName(data[i][1]);
-    var w = resolveWeights(ac, cIn, gIn, aIn);
-    sheet.getRange(i + 2, 14).setValue(w.norm);
-    updated++;
+  if (lr < 2) {
+    Logger.log("No rows.");
+    return;
   }
 
-  sheet.getRange(2, 14, numRows, 1).setNumberFormat("0.0000000000");
+  recalcAllDemographicWeightsAndNormalized();
   recalcGevsveAndFinalValues();
 
-  Logger.log("recalcAllNormalizedScores updated " + updated + " rows.");
+  Logger.log("recalcAllNormalizedScores: full raking + GevsVE done.");
 }
 
 function buildWeightedReportRows(dataRows, partyColumnIndex) {

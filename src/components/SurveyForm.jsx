@@ -8,7 +8,7 @@ import {
   winOptions,
   GOOGLE_SCRIPT_URL,
 } from "../data/surveyData";
-import { formatAcSelectLabel, sortConstituenciesByAcNo } from "../data/acNumbers";
+import { formatAcSelectLabel, sortConstituenciesByName } from "../data/acNumbers";
 import "./SurveyForm.css";
 
 /** Wall clock in Asia/Kolkata as `yyyy-mm-dd HH:mm:ss` — unambiguous for Apps Script date filters (avoids en-IN 1/4/2026 vs 4/1/2026). */
@@ -77,6 +77,10 @@ export default function SurveyForm() {
     perumbavoor: "Perumbavoor",
     kanjirapalli: "Kanjirappally",
     kanjirappally: "Kanjirappally",
+    thripunithura: "Thripunithura",
+    thrippunithura: "Thripunithura",
+    thripunitura: "Thripunithura",
+    thrikkakara: "Thrikkakara",
   };
 
   const canonicalizeAc = (name) => {
@@ -248,9 +252,10 @@ export default function SurveyForm() {
               name="ac"
               value={form.ac}
               onChange={handleChange}
+              aria-label="Assembly constituency, sorted A–Z; each line shows official AC number"
             >
               <option value="">— Select Constituency —</option>
-              {sortConstituenciesByAcNo(constituencyData).map((c) => (
+              {sortConstituenciesByName(constituencyData).map((c) => (
                 <option key={c.ac} value={c.ac}>
                   {formatAcSelectLabel(c.ac)}
                 </option>

@@ -16,6 +16,8 @@ export const AC_NUMBER_BY_NAME = {
   Kanjirappally: "100",
   Pala: "93",
   Thrissur: "67",
+  Thripunithura: "81",
+  Thrikkakara: "83",
   Kunnathunad: "84",
   Palakkad: "56",
   "Kozhikode North": "27",
@@ -45,6 +47,8 @@ export function getAcNo(acName) {
   if (k === "kazhakootam") return AC_NUMBER_BY_NAME.Kazhakkoottam || "";
   if (k === "perumbaavoor") return AC_NUMBER_BY_NAME.Perumbavoor || "";
   if (k === "kanjirapalli") return AC_NUMBER_BY_NAME.Kanjirappally || "";
+  if (k === "thripunitura" || k === "thrippunithura") return AC_NUMBER_BY_NAME.Thripunithura || "";
+  if (k === "thrikakkara") return AC_NUMBER_BY_NAME.Thrikkakara || "";
 
   return "";
 }
@@ -65,4 +69,15 @@ export function sortConstituenciesByAcNo(rows) {
     if (!na && nb) return 1;
     return String(a.ac).localeCompare(String(b.ac));
   });
+}
+
+/**
+ * Sort by constituency name A–Z (case-insensitive).
+ * Use this for the survey dropdown so names like Thripunithura / Thrikkakara appear with other “Th…”
+ * ACs instead of between unrelated numbers (81/83 vs 134).
+ */
+export function sortConstituenciesByName(rows) {
+  return [...rows].sort((a, b) =>
+    String(a.ac).localeCompare(String(b.ac), "en", { sensitivity: "base" })
+  );
 }
