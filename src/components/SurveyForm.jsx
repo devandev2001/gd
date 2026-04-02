@@ -47,7 +47,14 @@ export default function SurveyForm() {
   // Derived: FA names for selected AC
   const selectedAC = constituencyData.find((c) => c.ac === form.ac);
   const faNames = selectedAC
-    ? [selectedAC.fa1, selectedAC.fa2].filter(Boolean)
+    ? [
+        selectedAC.fa1,
+        selectedAC.fa2,
+        selectedAC.fa3,
+        selectedAC.fa4,
+        selectedAC.fa5,
+        selectedAC.fa6,
+      ].filter(Boolean)
     : [];
 
   const handleChange = (e) => {
