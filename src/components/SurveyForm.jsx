@@ -38,11 +38,15 @@ const fieldLabels = {
 export default function SurveyForm() {
   const [form, setForm] = useState(initialForm);
   const [submitting, setSubmitting] = useState(false);
+  const [cooldown, setCooldown] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
   const [attempted, setAttempted] = useState(false);
   const formRef = useRef();
+  // Prevent duplicate submissions: track the last submitted ID and a cooldown
+  const lastSubmitId = useRef(null);
+  const submitCooldown = useRef(false);
 
   // Derived: FA names for selected AC
   const selectedAC = constituencyData.find((c) => c.ac === form.ac);
@@ -91,6 +95,8 @@ export default function SurveyForm() {
     setSuccess(false);
     setAttempted(true);
 
+    // Hard guard: reject if a submission is already in-flight or within cooldown
+    if (submitting || submitCooldown.current) return;
     const errors = validate(form);
     setFieldErrors(errors);
 
@@ -107,6 +113,7 @@ export default function SurveyForm() {
     }
 
     setSubmitting(true);
+    submitCooldown.current = true;
 
     try {
       // Look up demographic weights
@@ -120,7 +127,12 @@ export default function SurveyForm() {
       // Normalized score = caste × gender × age
       const normalizedScore = casteWeight * genderWeight * ageWeight;
 
+      // Unique ID for this submission — server uses this to deduplicate retries
+      const submissionId = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      lastSubmitId.current = submissionId;
+
       const payload = {
+        submissionId,                // dedup key checked server-side
         timestamp: new Date().toLocaleString("en-IN", {
           timeZone: "Asia/Kolkata",
         }),
@@ -159,6 +171,14 @@ export default function SurveyForm() {
       );
     } finally {
       setSubmitting(false);
+      // Keep cooldown active for 8 s after a submission completes to prevent
+      // accidental double-tap on slow networks even after the button re-enables
+      setCooldown(true);
+      submitCooldown.current = true;
+      setTimeout(() => {
+        submitCooldown.current = false;
+        setCooldown(false);
+      }, 8000);
     }
   };
 
@@ -437,11 +457,13 @@ export default function SurveyForm() {
         )}
 
         {/* Submit */}
-        <button type="submit" className="submit-btn" disabled={submitting}>
+        <button type="submit" className="submit-btn" disabled={submitting || cooldown}>
           {submitting ? (
             <>
               <span className="spinner"></span> Submitting…
             </>
+          ) : cooldown ? (
+            "✓ Submitted — Ready in a moment…"
           ) : (
             "Submit Response"
           )}

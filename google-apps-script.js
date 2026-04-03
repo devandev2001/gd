@@ -1143,12 +1143,35 @@ function recalcAllDemographicWeightsAndNormalized() {
 }
 
 function doPost(e) {
+  // Acquire a process-wide lock so concurrent submissions don't race each other.
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000); // wait up to 10 s; throws if another invocation holds it
+  } catch (lockErr) {
+    return jsonResponse({ status: "error", message: "Server busy, please retry." });
+  }
+
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName(MAIN_SHEET_NAME) || ss.getSheets()[0];
     ensureHeaders(sheet);
 
     var data = JSON.parse(e.postData.contents);
+
+    // ── Idempotency check ──────────────────────────────────────────
+    // If the client sent a submissionId, check the recent-IDs cache.
+    // A retry with the same ID returns "duplicate" without writing again.
+    if (data.submissionId) {
+      var dedupeCache = CacheService.getScriptCache();
+      var dedupeKey = "sid_" + String(data.submissionId);
+      if (dedupeCache.get(dedupeKey)) {
+        return jsonResponse({ status: "duplicate", message: "Already recorded." });
+      }
+      // Mark this ID as seen for 10 minutes (covers any realistic retry window)
+      dedupeCache.put(dedupeKey, "1", 600);
+    }
+    // ──────────────────────────────────────────────────────────────
+
     var ac = normalizeAcName(data.ac);
     var vote2026 = votePredictionForSheet(data.vote2026);
     var whoWillWin = votePredictionForSheet(data.whoWillWin);
@@ -1204,6 +1227,8 @@ function doPost(e) {
     return jsonResponse({ status: "success", opRecalculated: true });
   } catch (err) {
     return jsonResponse({ status: "error", message: String(err) });
+  } finally {
+    lock.releaseLock();
   }
 }
 
