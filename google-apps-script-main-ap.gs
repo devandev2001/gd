@@ -1234,10 +1234,25 @@ function doPost(e) {
     var vote2026 = votePredictionForSheet(data.vote2026);
     var whoWillWin = votePredictionForSheet(data.whoWillWin);
 
-    var w = resolveWeights(ac, data.caste, data.gender, data.age);
-    var casteLabel = casteLabelForSheet(ac, data.caste, w.casteW);
-    var genderLabel = genderLabelForSheet(ac, data.gender, w.genderW);
-    var ageLabel = ageLabelForSheet(data.age, w.ageW);
+    // ── Prefer the explicit text labels the form sends (casteLabel, genderLabel,
+    //    ageLabel) over trying to reverse-engineer them from numeric weights.
+    //    The numeric fields (data.caste, data.gender, data.age) are legacy
+    //    client-side percentages; the text fields are the actual user selections.
+    var formCasteLabel  = data.casteLabel  || "";   // e.g. "Muslim", "Nair"
+    var formGenderLabel = data.genderLabel || "";   // e.g. "Male", "Female"
+    var formAgeLabel    = data.ageLabel    || "";   // e.g. "30-39", "50-59"
+
+    // Use text labels for weight resolution when available; fall back to legacy numeric
+    var casteForResolve  = (formCasteLabel  && isValidCasteLabel(formCasteLabel))  ? formCasteLabel  : data.caste;
+    var genderForResolve = (formGenderLabel && isValidGenderLabel(formGenderLabel)) ? formGenderLabel : data.gender;
+    var ageForResolve    = (formAgeLabel    && isValidAgeLabel(formAgeLabel))       ? formAgeLabel    : data.age;
+
+    var w = resolveWeights(ac, casteForResolve, genderForResolve, ageForResolve);
+
+    // Labels for columns E, G, I — prefer explicit text labels, fall back to old logic
+    var casteLabel  = (formCasteLabel  && isValidCasteLabel(formCasteLabel))  ? canonicalCasteKey(formCasteLabel)    : casteLabelForSheet(ac, data.caste, w.casteW);
+    var genderLabel = (formGenderLabel && isValidGenderLabel(formGenderLabel)) ? displayGenderLabel(formGenderLabel) : genderLabelForSheet(ac, data.gender, w.genderW);
+    var ageLabel    = (formAgeLabel    && isValidAgeLabel(formAgeLabel))       ? normalizeAgeLabel(formAgeLabel)     : ageLabelForSheet(data.age, w.ageW);
 
     sheet.appendRow([
       data.timestamp,
