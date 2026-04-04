@@ -10,10 +10,7 @@
 
 var MAIN_SHEET_NAME = "Sheet1";
 
-/** Short-lived cache for entries API (reduces repeat loads; TTL keeps new submissions visible quickly). */
-var ENTRIES_CACHE_TTL_SEC = 45;
-var ENTRIES_CACHE_MAX_CHARS = 95000;
-/** Short-lived cache for entries API (reduces repeat dashboard hits). Max ~100KB per CacheService entry. */
+/** Short-lived cache for entries API (reduces repeat dashboard hits; TTL keeps new submissions visible quickly). Max ~100KB per CacheService entry. */
 var ENTRIES_CACHE_TTL_SEC = 60;
 var ENTRIES_CACHE_MAX_CHARS = 95000;
 var DEMOGRAPHICS_SHEET_NAME = "FINAL GENDER CASTE";
@@ -53,6 +50,7 @@ var AC_DEMOGRAPHICS_FALLBACK = {
   "Azhikode": {"male": 47.58, "female": 52.42},
   "Balussery": {"male": 48.58, "female": 51.41},
   "Beypore": {"male": 48.97, "female": 51.03},
+  "Beypur": {"male": 48.97, "female": 51.03},
   "Chadayamangalam": {"male": 47.41, "female": 52.58},
   "Chalakkudy": {"male": 48.87, "female": 51.13, "Muslim": 2.91, "Christian": 49.09, "Nair": 7.7, "Ezhava": 17.8, "Others": 10.97, "SC/ST": 11.58},
   "Changanassery": {"male": 48.2, "female": 51.8, "Muslim": 7.9, "Christian": 45.4, "Nair": 12.57, "Ezhava": 17.34, "Others": 6.44, "SC/ST": 10.35},
@@ -200,6 +198,7 @@ var AC_FA_ROSTER = {
   "Guruvayoor": ["Sreehari", "Ranjith"],
   "Harippad": ["Vaishakh V", "Akul R Kamath"],
   "Irinjalakkuda": ["Akshay Sasidharan", "Athul", "Sanjay Babu S"],
+  "Irinjalakuda": ["Akshay Sasidharan", "Athul", "Sanjay Babu S"],
   "Kalpetta": ["Ragesh Ambadi"],
   "Kanjirappally": ["Gokul PG", "Harikrishnan AB", "Shiju Abraham"],
   "Karunagappally": ["Akshay M"],
@@ -224,6 +223,7 @@ var AC_FA_ROSTER = {
   "Ponnani": ["YADHU KRISHNAN V"],
   "Poonjar": ["Sajan P Nair", "Rahul", "Anandhu Anil Olickka"],
   "Sulthan Bathery": ["Nithin KV"],
+  "Sultan Bathery": ["Nithin KV"],
   "Thiruvalla": ["Nikhil MR", "Nidhin P Nair", "Umeshkumar"],
   "Thiruvananthapuram": ["Sudheesh", "Akhil R", "Arun A"],
   "Thrikkakara": ["Adarshjith"],
@@ -338,6 +338,10 @@ function normalizeAcName(acRaw) {
   if (k === "manalur ac" || k === "manalur") return "Manalur";
   if (k === "perumbaavoor" || k === "perumbavoor ac" || k === "perumbavoor") return "Perumbavoor";
   if (k === "kanjirapalli" || k === "kanjirappally" || k === "kanjirappalli") return "Kanjirappally";
+  if (k === "sulthan bathery" || k === "sultan bathery") return "Sultan Bathery";
+  if (k === "irinjalakkuda" || k === "irinjalakuda") return "Irinjalakuda";
+  if (k === "beypur" || k === "beypore") return "Beypur";
+  if (k === "kazhakootam" || k === "kazhakkootam" || k === "kazhakkoottam") return "Kazhakkoottam";
   // Kunnathunad — common sheet/typo variants (if AC unknown, caste×gender×age norm stays 0)
   if (
     k === "kunnathunad" ||
@@ -1159,13 +1163,44 @@ function recalcAllDemographicWeightsAndNormalized() {
   sheet.getRange(2, 14, numRows, 1).setNumberFormat("0.0000000000");
 }
 
+/**
+ * Dedup TTL (seconds). A submissionId is remembered for this long —
+ * any retry with the same ID within this window is silently accepted
+ * without appending a duplicate row.
+ */
+var DEDUP_TTL_SEC = 300;   // 5 minutes
+
 function doPost(e) {
+  // --- Acquire a script-wide lock so concurrent POSTs are serialized ---
+  var lock = LockService.getScriptLock();
   try {
+    // Wait up to 20 s for the lock; if another POST is in-flight, this queues.
+    lock.waitLock(20000);
+  } catch (lockErr) {
+    return jsonResponse({ status: "error", message: "Server busy, please retry." });
+  }
+
+  try {
+    var data = JSON.parse(e.postData.contents);
+
+    // --- Dedup: reject if this submissionId was already processed ---
+    var subId = data.submissionId || "";
+    if (subId) {
+      var dedupCache = CacheService.getScriptCache();
+      var dedupKey = "dedup_" + subId;
+      if (dedupCache.get(dedupKey)) {
+        // Already appended — return success without writing again
+        return jsonResponse({ status: "success", duplicate: true });
+      }
+      // Mark as seen *before* the append — worst case we skip a true retry
+      // rather than accidentally writing twice.
+      dedupCache.put(dedupKey, "1", DEDUP_TTL_SEC);
+    }
+
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName(MAIN_SHEET_NAME) || ss.getSheets()[0];
     ensureHeaders(sheet);
 
-    var data = JSON.parse(e.postData.contents);
     var ac = normalizeAcName(data.ac);
     var vote2026 = votePredictionForSheet(data.vote2026);
     var whoWillWin = votePredictionForSheet(data.whoWillWin);
@@ -1221,6 +1256,8 @@ function doPost(e) {
     return jsonResponse({ status: "success", opRecalculated: true });
   } catch (err) {
     return jsonResponse({ status: "error", message: String(err) });
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -1260,6 +1297,9 @@ function doGet(e) {
     }
     if (action === "dates") {
       return jsonResponse(getAvailableDates());
+    }
+    if (action === "timestamps") {
+      return jsonResponse(getUniqueTimestampDates());
     }
     if (action === "refreshDemographics") {
       clearDemographicsCache();
@@ -1652,6 +1692,36 @@ function getAvailableDates() {
     }
   }
   return { dates: dates };
+}
+
+/**
+ * Returns unique yyyy-MM-dd dates found in column A of Sheet1.
+ * The dashboard can call ?action=timestamps to know which calendar days have data,
+ * regardless of whether a summary tab exists for that day.
+ */
+function getUniqueTimestampDates() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(MAIN_SHEET_NAME) || ss.getSheets()[0];
+  var lr = sheet.getLastRow();
+  if (lr < 2) return { dates: [] };
+
+  var numRows = lr - 1;
+  var tsCol = sheet.getRange(2, 1, numRows, 1).getDisplayValues();
+  var raw   = sheet.getRange(2, 1, numRows, 1).getValues();
+  var seen = {};
+  var result = [];
+  for (var i = 0; i < numRows; i++) {
+    var display = tsCol[i][0];
+    var rawVal  = raw[i][0];
+    var tsF = timestampForDateFilter(display, rawVal);
+    var ymd = cellToYmdKolkata(tsF);
+    if (ymd && !seen[ymd]) {
+      seen[ymd] = true;
+      result.push(ymd);
+    }
+  }
+  result.sort();
+  return { dates: result };
 }
 
 function pickCasteInputForResolve(row) {
