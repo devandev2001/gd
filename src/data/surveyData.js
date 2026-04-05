@@ -15,7 +15,6 @@ export const constituencyData = [
   { ac: "Devikulam", fa1: "Ananthan" },
   { ac: "Ettumanoor", fa1: "Sreehari Babu" },
   { ac: "Idukki", fa1: "FA 1", fa2: "FA 2" },
-  { ac: "Irinjalakkuda", fa1: "Akshay Sasidharan", fa2: "Athul", fa3: "Sanjay Babu S" },
   { ac: "Irikkur", fa1: "FA 1", fa2: "FA 2" },
   { ac: "Kalpetta", fa1: "Ragesh Ambadi" },
   { ac: "Kanhangad", fa1: "FA 1", fa2: "FA 2" },
