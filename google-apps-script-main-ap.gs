@@ -1354,6 +1354,10 @@ function doGet(e) {
       recalcGevsveAndFinalValues();
       return jsonResponse({ status: "ok", message: "D–N and O/P recalculated (raking + GevsVE)" });
     }
+    if (action === "repairLabels") {
+      var fixed = repairLabelsInSheet();
+      return jsonResponse({ status: "ok", rowsFixed: fixed });
+    }
     if (action === "ping") {
       pingWarm();
       return jsonResponse({ status: "ok" });
@@ -1374,6 +1378,68 @@ function jsonResponse(obj) {
 function entriesCacheKey(suffix) {
   var gen = PropertiesService.getScriptProperties().getProperty("entriesCacheGen") || "0";
   return "ent_v1_g" + gen + "_" + suffix;
+}
+
+/**
+ * ONE-TIME REPAIR: scan all rows and fix label columns (E=Caste, G=Gender, I=Age)
+ * that contain numeric weights instead of text labels.
+ * Run this once from the Apps Script editor: Run → repairLabelsInSheet
+ */
+function repairLabelsInSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(MAIN_SHEET_NAME) || ss.getSheets()[0];
+  var lr = sheet.getLastRow();
+  if (lr < 2) return;
+
+  var numRows = lr - 1;
+  // Columns: B=AC, D=CasteW, E=CasteLabel, F=GenderW, G=GenderLabel, H=AgeW, I=AgeLabel
+  var data = sheet.getRange(2, 1, numRows, 9).getValues();
+  var fixes = 0;
+
+  for (var r = 0; r < numRows; r++) {
+    var ac = normalizeAcName(data[r][1]);  // col B
+    var casteW  = data[r][3];   // col D
+    var casteLbl = data[r][4];  // col E
+    var genderW  = data[r][5];  // col F
+    var genderLbl = data[r][6]; // col G
+    var ageW     = data[r][7];  // col H
+    var ageLbl   = data[r][8];  // col I
+
+    var sheetRow = r + 2;
+    var changed = false;
+
+    // Fix caste label: if it's a number or blank, resolve from weight
+    if (!isTextLabel(casteLbl) || !isValidCasteLabel(casteLbl)) {
+      var newCaste = casteLabelForSheet(ac, casteLbl, casteW);
+      if (newCaste && newCaste !== "Unknown") {
+        sheet.getRange(sheetRow, 5).setValue(newCaste);
+        changed = true;
+      }
+    }
+
+    // Fix gender label: if it's a number or blank, resolve from weight
+    if (!isTextLabel(genderLbl) || !isValidGenderLabel(genderLbl)) {
+      var newGender = genderLabelForSheet(ac, genderLbl, genderW);
+      if (newGender && newGender !== "Unknown") {
+        sheet.getRange(sheetRow, 7).setValue(newGender);
+        changed = true;
+      }
+    }
+
+    // Fix age label: if it's a number or blank, resolve from weight
+    if (!isTextLabel(ageLbl) || !isValidAgeLabel(ageLbl)) {
+      var newAge = ageLabelForSheet(ageLbl, ageW);
+      if (newAge && newAge !== "Unknown") {
+        sheet.getRange(sheetRow, 9).setValue(newAge);
+        changed = true;
+      }
+    }
+
+    if (changed) fixes++;
+  }
+
+  Logger.log("repairLabelsInSheet done: " + fixes + " rows fixed out of " + numRows);
+  return fixes;
 }
 
 /** Bump generation so all prior entry-cache keys are ignored (call after sheet changes). */
