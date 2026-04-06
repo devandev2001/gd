@@ -9,7 +9,7 @@ export const constituencyData = [
   { ac: "Changanassery", fa1: "FA 1", fa2: "FA 2" },
   { ac: "Chathannoor", fa1: "Aromal A", fa2: "Sajikumar S", fa3: "Aravind AS" },
   { ac: "Chelakkara", fa1: "Jithesh Nair" },
-  { ac: "Chengannur", fa1: "Aswin S", fa2: "Ananthu R Pillai" },
+  { ac: "Chengannur", fa1: "Aswin S", fa2: "Ananthu R Pillai", fa3: "Umesh Kumar" },
   { ac: "Cherthala", fa1: "FA 1", fa2: "FA 2" },
   { ac: "Chirayankeezhu", fa1: "FA 1", fa2: "FA 2" },
   { ac: "Devikulam", fa1: "Ananthan" },
